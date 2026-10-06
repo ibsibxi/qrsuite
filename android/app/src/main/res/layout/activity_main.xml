@@ -66,6 +66,19 @@
             android:contentDescription="@string/torch"
             app:icon="@drawable/ic_torch_off" />
 
+        <!-- 语言切换：显示的是"切过去"的目标语言（当前中文时显示 English） -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnLang"
+            style="@style/Widget.QRSuite.SubtleButton"
+            android:layout_width="wrap_content"
+            android:layout_height="36dp"
+            android:layout_marginStart="4dp"
+            android:minWidth="0dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"
+            android:text="@string/lang_toggle"
+            android:textSize="12sp" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/btnHistory"
             style="@style/Widget.QRSuite.IconButton"

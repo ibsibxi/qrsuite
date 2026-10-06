@@ -23,6 +23,7 @@
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
+        <!-- 码制标签（成功时显示，如 QR Code） -->
         <TextView
             android:id="@+id/resFormat"
             android:layout_width="wrap_content"
@@ -36,6 +37,23 @@
             android:text="QR Code"
             android:textColor="@color/accent"
             android:textSize="12sp" />
+
+        <!-- 厂商标籤：标明二维码来源厂商（微信/抖音/支付宝/第三方） -->
+        <TextView
+            android:id="@+id/resVendor"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_version_chip"
+            android:fontFamily="sans-serif-medium"
+            android:paddingStart="10dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="4dp"
+            android:text=""
+            android:textColor="@color/accent"
+            android:textSize="12sp"
+            android:visibility="gone" />
 
         <TextView
             android:layout_width="0dp"
@@ -57,6 +75,19 @@
             app:iconSize="20dp"
             app:iconTint="@color/on_surface_dim" />
     </LinearLayout>
+
+    <!-- 失败/无结果时的说明（成功时隐藏） -->
+    <TextView
+        android:id="@+id/resNotice"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_content_box"
+        android:lineSpacingExtra="3dp"
+        android:padding="14dp"
+        android:textColor="@color/on_surface"
+        android:textSize="14sp"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/resContent"
@@ -82,6 +113,7 @@
 
     <!-- 主操作：复制 / 分享 -->
     <LinearLayout
+        android:id="@+id/resRowMain"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="18dp"
@@ -109,6 +141,7 @@
 
     <!-- 次要操作：打开链接 / 搜索（弱化为文字按钮，避免四个按钮挤一行） -->
     <LinearLayout
+        android:id="@+id/resRowSub"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
@@ -124,6 +157,7 @@
             app:icon="@drawable/ic_open" />
 
         <View
+            android:id="@+id/resDivider"
             android:layout_width="1dp"
             android:layout_height="18dp"
             android:layout_marginStart="2dp"

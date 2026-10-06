@@ -16,16 +16,34 @@
     <string name="search">搜索</string>
     <string name="continue_scan">继续扫描</string>
     <string name="copied">已复制</string>
-    <string name="no_code_found">没识别到条码，换张图试试</string>
-    <string name="stylized_code_hint">没识别到条码。若这是抖音主页码或微信赞赏码，它的圆点圆环是私有样式，通用解码器读不出来，请用对应 App 扫一扫。</string>
-    <!-- 结构判定结果（本地几何判定，非云端）。这类码协议私有，只能识别是哪一家，无法解出内容。 -->
+
+    <!-- ===== 厂商分类标签（显示在结果组件的标签位）===== -->
+    <string name="vendor_tencent_wechat">腾讯 · 微信</string>
+    <string name="vendor_bytedance_douyin">字节 · 抖音</string>
+    <string name="vendor_alipay">支付宝</string>
+    <string name="vendor_thirdparty">第三方 / 未知来源</string>
+
+    <!-- ===== 私有样式码（无法解码，只能识别厂商并提示用对应 App）===== -->
     <string name="stylized_douyin">这是抖音主页码（私有格式，无法离线解出内容）。请打开抖音 App「扫一扫」识别。</string>
     <string name="stylized_wechat_mp">这是微信小程序码（私有格式，无法离线解出内容）。请用微信「扫一扫」识别。</string>
     <string name="stylized_wechat_reward">这是微信赞赏码（私有格式，且涉及支付，无法离线解出内容）。请用微信「扫一扫」识别。</string>
+    <string name="stylized_alipay">这看起来是支付宝的样式码（私有格式，无法离线解出内容）。请用支付宝「扫一扫」识别。</string>
+    <string name="stylized_thirdparty">这是一张私有样式码（圆点/圆环排布的异形码），但来源厂商无法确定。\n通用解码器读不出这类码的内容，请用它所属的 App 扫一扫；若不确定来源，可试微信、支付宝、抖音。</string>
     <string name="stylized_unknown">没识别到条码，也不像已知的私有样式码，换张更清晰的原图试试。</string>
+
+    <!-- ===== 失败态（也用同一个结果组件展示，不再弹 toast）===== -->
+    <string name="fail_title">未能识别</string>
+    <string name="fail_image_unreadable">图片读取失败。可能文件已损坏或格式不受支持，换一张试试。</string>
+    <string name="fail_nothing_found">这张图里没有找到可识别的二维码或条码。\n建议：用原图（不要用截图再压缩过的）、对准码、避免反光与模糊。</string>
+    <string name="fail_decode_error">识别过程出错：%1$s</string>
+    <string name="fail_camera_init">相机初始化失败：%1$s</string>
+
     <string name="history_empty">还没有记录</string>
     <string name="clear_history">清空历史</string>
     <string name="cleared">历史已清空</string>
-    <string name="detecting">识别中…</string>
     <string name="secondary_actions">其他操作</string>
+
+    <!-- 语言切换：按钮显示"切过去的目标语言"（当前中文时显示 English）。
+         注意这条在中文资源里刻意是英文，在英文资源里是"中文"。 -->
+    <string name="lang_toggle">English</string>
 </resources>

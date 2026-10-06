@@ -36,6 +36,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.appcompat.app.AppCompatDelegate;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ExperimentalGetImage;
@@ -45,6 +46,7 @@ import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
+import androidx.core.os.LocaleListCompat;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
@@ -81,7 +83,7 @@ public class MainActivity extends AppCompatActivity {
     private PreviewView previewView;
     private ScanOverlayView overlay;
     private LinearLayout permPanel;
-    private MaterialButton btnTorch, btnHistory, btnPick, btnGrant, btnPickFromPerm;
+    private MaterialButton btnTorch, btnHistory, btnPick, btnGrant, btnPickFromPerm, btnLang;
     private TextView hint;
 
     private ProcessCameraProvider cameraProvider;
@@ -118,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
         btnPick = findViewById(R.id.btnPick);
         btnGrant = findViewById(R.id.btnGrant);
         btnPickFromPerm = findViewById(R.id.btnPickFromPerm);
+        btnLang = findViewById(R.id.btnLang);
 
         BarcodeScannerOptions options = new BarcodeScannerOptions.Builder()
                 .setBarcodeFormats(
@@ -144,6 +147,8 @@ public class MainActivity extends AppCompatActivity {
         btnPick.setOnClickListener(v -> launchPicker());
         btnPickFromPerm.setOnClickListener(v -> launchPicker());
         btnGrant.setOnClickListener(v -> permLauncher.launch(Manifest.permission.CAMERA));
+        btnLang.setOnClickListener(v -> toggleLang());
+        updateLangButton();
 
         if (hasCamera()) {
             permPanel.setVisibility(View.GONE);
@@ -261,7 +266,7 @@ public class MainActivity extends AppCompatActivity {
                 bindUseCases();
             } catch (Exception e) {
                 Log.e(TAG, "相机初始化失败", e);
-                Toast.makeText(this, "相机初始化失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                showFailure(getString(R.string.fail_camera_init, String.valueOf(e.getMessage())));
             }
         }, ContextCompat.getMainExecutor(this));
     }
@@ -437,13 +442,12 @@ public class MainActivity extends AppCompatActivity {
 
     private void decodeFromUri(Uri uri) {
         setScanning(false);
-        Toast.makeText(this, R.string.detecting, Toast.LENGTH_SHORT).show();
         InputImage input;
         try {
             input = InputImage.fromFilePath(this, uri);
         } catch (Exception e) {
             setScanning(true);
-            Toast.makeText(this, "图片读取失败", Toast.LENGTH_LONG).show();
+            showFailure(getString(R.string.fail_image_unreadable));
             return;
         }
         scanner.process(input)
@@ -455,7 +459,6 @@ public class MainActivity extends AppCompatActivity {
                         //
                         // 判定几何与 Python 参考实现逐字对齐（见 StylizedDetector 类注释），
                         // 已用 16 张样本做一致性回归：判定/置信度/定位点数/圆心全部一致。
-                        // 未识别出已知厂商时退回原来的通用措辞提示。
                         detectStylizedThenHint(uri);
                         return;
                     }
@@ -471,7 +474,7 @@ public class MainActivity extends AppCompatActivity {
                 })
                 .addOnFailureListener(e -> {
                     setScanning(true);
-                    Toast.makeText(this, "识别失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                    showFailure(getString(R.string.fail_decode_error, String.valueOf(e.getMessage())));
                 });
     }
 
@@ -516,55 +519,142 @@ public class MainActivity extends AppCompatActivity {
             final String k = kind;
             new Handler(Looper.getMainLooper()).post(() -> {
                 setScanning(true);
-                int res;
-                if (StylizedDetector.KIND_DOUYIN.equals(k)) res = R.string.stylized_douyin;
-                else if (StylizedDetector.KIND_WECHAT_MINIPROGRAM.equals(k)) res = R.string.stylized_wechat_mp;
-                else if (StylizedDetector.KIND_WECHAT_REWARD.equals(k)) res = R.string.stylized_wechat_reward;
-                else res = R.string.stylized_code_hint;   // 未识别出已知厂商：保留通用措辞
-                Toast.makeText(this, res, Toast.LENGTH_LONG).show();
+                // 一律用结果组件展示（不再弹 toast）：
+                // 识别出厂商 -> 显示厂商标签 + 对应提示；
+                // 认不出厂商 -> 归为「第三方 / 未知来源」并说明这是私有样式码。
+                if (k != null) {
+                    showResult(null, null, vendorLabel(k), vendorNotice(k));
+                } else {
+                    // 既不是已知厂商，也不像已知的异形码结构 → 就是没找到码。
+                    // 仍用同一个结果组件展示（按需求：失败也弹组件，不用 toast）。
+                    showFailure(getString(R.string.fail_nothing_found));
+                }
             });
         }, "stylized-detect").start();
     }
 
 
+    // ---------------- 语言切换 ----------------
+
+    /** 切换按钮上显示的是"切过去的目标语言"，所以当前中文时显示 English。 */
+    private void updateLangButton() {
+        if (btnLang == null) return;
+        boolean zh = isChineseNow();
+        btnLang.setText(zh ? "English" : "中文");
+        btnLang.setContentDescription(zh ? "Switch to English" : "切换到中文");
+    }
+
+    private boolean isChineseNow() {
+        String code = AppCompatDelegate.getApplicationLocales().toLanguageTags();
+        if (code == null || code.isEmpty()) {
+            // 未手动指定 -> 跟随系统
+            return "zh".equalsIgnoreCase(Locale.getDefault().getLanguage());
+        }
+        return code.toLowerCase(Locale.ROOT).startsWith("zh");
+    }
+
+    /**
+     * 中英切换。用 AppCompatDelegate 的应用级语言设置（AndroidX 会持久化并在
+     * 需要时重建 Activity），不自己写 locale 覆盖，避免与系统/其它库打架。
+     */
+    private void toggleLang() {
+        boolean zh = isChineseNow();
+        AppCompatDelegate.setApplicationLocales(
+                zh ? LocaleListCompat.forLanguageTags("en")
+                   : LocaleListCompat.forLanguageTags("zh"));
+        // Activity 会被重建，按钮文案在重建后的 onCreate 里更新
+    }
+
+
     // ---------------- 结果面板 ----------------
 
-    private void showResult(String content, String format) {
+    /**
+     * 统一的结果组件（BottomSheet）。
+     *
+     * <p>成功与失败**都用这一个组件**展示（按需求：不再用 toast 提示成败）：
+     * <ul>
+     *   <li>成功：显示码制标签 + 厂商标签 + 内容 + 复制/分享/打开等操作。</li>
+     *   <li>失败：隐藏内容与操作，只显示一段说明（resNotice）。</li>
+     * </ul>
+     *
+     * @param content 成功时的内容；失败传 null
+     * @param format  码制（如 "QR Code"）；失败传 null
+     * @param vendor  厂商标签文案；无则隐藏
+     * @param notice  失败说明；非 null 时进入失败态
+     */
+    private void showResult(String content, String format, String vendor, String notice) {
         BottomSheetDialog dlg = new BottomSheetDialog(this, R.style.Theme_QRSuite_Sheet);
         View v = LayoutInflater.from(this).inflate(R.layout.sheet_result, null, false);
 
         TextView tvFormat = v.findViewById(R.id.resFormat);
+        TextView tvVendor = v.findViewById(R.id.resVendor);
         TextView tvContent = v.findViewById(R.id.resContent);
+        TextView tvNotice = v.findViewById(R.id.resNotice);
         TextView tvMeta = v.findViewById(R.id.resMeta);
         MaterialButton bCopy = v.findViewById(R.id.resCopy);
         MaterialButton bShare = v.findViewById(R.id.resShare);
         MaterialButton bOpen = v.findViewById(R.id.resOpen);
         MaterialButton bSearch = v.findViewById(R.id.resSearch);
         MaterialButton bClose = v.findViewById(R.id.resClose);
+        View openDivider = v.findViewById(R.id.resDivider);
+        View rowMain = v.findViewById(R.id.resRowMain);
+        View rowSub = v.findViewById(R.id.resRowSub);
 
-        tvFormat.setText(format);
-        tvContent.setText(content);
-        tvMeta.setText(content.length() + " 字符 · 已存入历史");
+        boolean failed = (notice != null);
 
-        boolean isUrl = looksLikeUrl(content);
-        bOpen.setVisibility(isUrl ? View.VISIBLE : View.GONE);
+        // ---- 标签区 ----
+        if (failed) {
+            tvFormat.setText(R.string.fail_title);
+        } else {
+            tvFormat.setText(format == null ? "" : format);
+        }
+        if (vendor != null && !vendor.isEmpty()) {
+            tvVendor.setText(vendor);
+            tvVendor.setVisibility(View.VISIBLE);
+        } else {
+            tvVendor.setVisibility(View.GONE);
+        }
 
-        bCopy.setOnClickListener(x -> {
-            copy(content);
-            Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show();
-        });
-        bShare.setOnClickListener(x -> {
-            Intent i = new Intent(Intent.ACTION_SEND);
-            i.setType("text/plain");
-            i.putExtra(Intent.EXTRA_TEXT, content);
-            startActivity(Intent.createChooser(i, getString(R.string.share)));
-        });
-        bOpen.setOnClickListener(x -> openUrl(content));
-        bSearch.setOnClickListener(x -> {
-            Intent i = new Intent(Intent.ACTION_VIEW,
-                    Uri.parse("https://www.google.com/search?q=" + Uri.encode(content)));
-            startActivity(i);
-        });
+        // ---- 主体 ----
+        if (failed) {
+            tvNotice.setText(notice);
+            tvNotice.setVisibility(View.VISIBLE);
+            tvContent.setVisibility(View.GONE);
+            tvMeta.setVisibility(View.GONE);
+            rowMain.setVisibility(View.GONE);
+            rowSub.setVisibility(View.GONE);
+            if (openDivider != null) openDivider.setVisibility(View.GONE);
+        } else {
+            tvNotice.setVisibility(View.GONE);
+            tvContent.setVisibility(View.VISIBLE);
+            tvContent.setText(content);
+            tvMeta.setVisibility(View.VISIBLE);
+            tvMeta.setText(content.length() + " 字符 · 已存入历史");
+            rowMain.setVisibility(View.VISIBLE);
+            rowSub.setVisibility(View.VISIBLE);
+
+            boolean isUrl = looksLikeUrl(content);
+            bOpen.setVisibility(isUrl ? View.VISIBLE : View.GONE);
+            if (openDivider != null) openDivider.setVisibility(isUrl ? View.VISIBLE : View.GONE);
+
+            bCopy.setOnClickListener(x -> {
+                copy(content);
+                Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show();
+            });
+            bShare.setOnClickListener(x -> {
+                Intent i = new Intent(Intent.ACTION_SEND);
+                i.setType("text/plain");
+                i.putExtra(Intent.EXTRA_TEXT, content);
+                startActivity(Intent.createChooser(i, getString(R.string.share)));
+            });
+            bOpen.setOnClickListener(x -> openUrl(content));
+            bSearch.setOnClickListener(x -> {
+                Intent i = new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.google.com/search?q=" + Uri.encode(content)));
+                startActivity(i);
+            });
+        }
+
         bClose.setOnClickListener(x -> dlg.dismiss());
         v.findViewById(R.id.resContinue).setOnClickListener(x -> dlg.dismiss());
 
@@ -573,6 +663,32 @@ public class MainActivity extends AppCompatActivity {
             if (hasCamera()) setScanning(true);
         });
         dlg.show();
+    }
+
+    /** 兼容旧调用：成功态、无厂商。 */
+    private void showResult(String content, String format) {
+        showResult(content, format, null, null);
+    }
+
+    /** 以结果组件展示失败（替代原来的 toast）。 */
+    private void showFailure(String notice) {
+        showResult(null, null, null, notice);
+    }
+
+    /** 厂商 kind -> 显示标签。知名厂商分类；识别不出则归为「第三方 / 未知来源」。 */
+    private String vendorLabel(String kind) {
+        if (StylizedDetector.KIND_DOUYIN.equals(kind)) return getString(R.string.vendor_bytedance_douyin);
+        if (StylizedDetector.KIND_WECHAT_MINIPROGRAM.equals(kind)
+                || StylizedDetector.KIND_WECHAT_REWARD.equals(kind)) return getString(R.string.vendor_tencent_wechat);
+        return getString(R.string.vendor_thirdparty);
+    }
+
+    /** 厂商 kind -> 提示文案。 */
+    private String vendorNotice(String kind) {
+        if (StylizedDetector.KIND_DOUYIN.equals(kind)) return getString(R.string.stylized_douyin);
+        if (StylizedDetector.KIND_WECHAT_MINIPROGRAM.equals(kind)) return getString(R.string.stylized_wechat_mp);
+        if (StylizedDetector.KIND_WECHAT_REWARD.equals(kind)) return getString(R.string.stylized_wechat_reward);
+        return getString(R.string.stylized_thirdparty);
     }
 
     private void copy(String text) {

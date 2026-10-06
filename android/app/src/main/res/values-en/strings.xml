@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- English strings. The default values/strings.xml is Chinese; this file is used
-     when the device language is any non-Chinese locale. -->
+     when the user picks English with the in-app language toggle.
+     KEY SET MUST STAY IN SYNC WITH values/strings.xml (checked by a script in the repo). -->
 <resources>
     <string name="app_name">QRSuite</string>
     <string name="scan_hint">Point the camera at a QR or barcode</string>
@@ -18,16 +19,32 @@
     <string name="search">Search</string>
     <string name="continue_scan">Keep scanning</string>
     <string name="copied">Copied</string>
-    <string name="no_code_found">No barcode found — try another image</string>
     <string name="history_empty">No history yet</string>
     <string name="clear_history">Clear history</string>
     <string name="cleared">History cleared</string>
-    <string name="detecting">Scanning…</string>
     <string name="secondary_actions">More actions</string>
-    <string name="stylized_code_hint">No barcode found. If this is a Douyin profile code or a WeChat reward code, its dotted/ring modules are a proprietary format that general-purpose decoders cannot read — please scan it with the matching app.</string>
-    <!-- Structure detection result (on-device geometric classification, not cloud). -->
+
+    <!-- In-app language toggle -->
+    <string name="lang_toggle">中文</string>
+
+    <!-- ===== Vendor labels (shown as a chip in the result sheet) ===== -->
+    <string name="vendor_tencent_wechat">Tencent · WeChat</string>
+    <string name="vendor_bytedance_douyin">ByteDance · Douyin</string>
+    <string name="vendor_alipay">Alipay</string>
+    <string name="vendor_thirdparty">Third party / unknown</string>
+
+    <!-- ===== Proprietary stylized codes (cannot be decoded; identify the vendor and suggest the right app) ===== -->
     <string name="stylized_douyin">This is a Douyin profile code (proprietary format, contents cannot be decoded offline). Please scan it with the Douyin app.</string>
     <string name="stylized_wechat_mp">This is a WeChat Mini Program code (proprietary format, contents cannot be decoded offline). Please scan it with WeChat.</string>
     <string name="stylized_wechat_reward">This is a WeChat reward code (proprietary format involving payments; contents cannot be decoded offline). Please scan it with WeChat.</string>
+    <string name="stylized_alipay">This looks like an Alipay stylized code (proprietary format, contents cannot be decoded offline). Please scan it with the Alipay app.</string>
+    <string name="stylized_thirdparty">This is a proprietary stylized code (dot/ring modules), but its vendor cannot be determined.\nGeneral-purpose decoders cannot read such codes — please scan it with the app it came from. If unsure, try WeChat, Alipay or Douyin.</string>
     <string name="stylized_unknown">No barcode found, and it does not match a known stylized code. Try a sharper original photo.</string>
+
+    <!-- ===== Failure state (shown in the same result sheet; no toast) ===== -->
+    <string name="fail_title">Not recognized</string>
+    <string name="fail_image_unreadable">Could not read the image. The file may be corrupt or unsupported — try another one.</string>
+    <string name="fail_nothing_found">No QR code or barcode was found in this image.\nTips: use the original photo (not a re-compressed screenshot), aim straight at the code, avoid glare and blur.</string>
+    <string name="fail_decode_error">Decoding failed: %1$s</string>
+    <string name="fail_camera_init">Camera initialization failed: %1$s</string>
 </resources>
