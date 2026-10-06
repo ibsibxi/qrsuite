@@ -24,8 +24,12 @@
 
 | 平台 | 文件 | 说明 |
 |---|---|---|
-| **Android** | [QRSuite-2.0.4-arm64.apk](https://github.com/ibsibxi/qrsuite/releases/download/v2.0.4/QRSuite-2.0.4-arm64.apk) | 7.59 MB，原生 CameraX + ML Kit，**仅 arm64**（现代手机），正式签名，无网络权限，中/英界面 |
-| **Windows** | [QRSuite.exe](https://github.com/ibsibxi/qrsuite/releases/tag/v2.0.3) | 80 MB，单文件版，双击启动本地服务并自动开浏览器 |
+| **Android** | [QRSuite-2.3.0-arm64.apk](https://github.com/ibsibxi/qrsuite/releases/download/v2.3.0/QRSuite-2.3.0-arm64.apk) | 7.6 MB，原生 CameraX + ML Kit，**仅 arm64**（现代手机），正式签名，无网络权限，中/英切换 |
+| **Windows** | [QRSuite.exe](https://github.com/ibsibxi/qrsuite/releases/download/v2.3.0/QRSuite.exe) | 80 MB，单文件版，双击启动本地服务并自动开浏览器 |
+| **网页版** | <https://ibsibxi.github.io/qrsuite/> | 无需安装，纯前端离线可用（见上方「在线试用」） |
+
+> 各端版本号含义不同：网页端 = `sw.js` 缓存版本（**2.3.0**）、Android = `versionName`（**2.1.2**，versionCode 4）、
+> Python 包 = `qrsuite.__version__`（**2.1.1**）。三者是独立演进的功能集，Release 以网页端版本的 `v2.3.0` 统一打标。
 
 > Android 装上后若曾装过 debug 签名版，需先卸载（签名不同无法覆盖安装）。
 > Windows 目前**无数字签名**，SmartScreen 会提示"已保护你的电脑"，点"仍要运行"即可；
