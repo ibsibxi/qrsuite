@@ -110,89 +110,6 @@
     return cv;
   }
 
-  /**
-   * 绘制一朵"放射/圆环"装饰图（**不是真太阳码**，见下方说明）。
-   *
-   * 为什么不能生成真太阳码：微信小程序码的编码路径、32 个 mask 模板、元信息坐标、
-   * 纠错多项式**全无公开文档**（官方原话"完全私有协议，只有微信可以生成，也只有微信可以解码"），
-   * 本地无法编码。GitHub 上 20+ 个"生成器"项目也都是调微信官方接口或生成普通二维码。
-   *
-   * 所以这里做的是**装饰图案**：外观模仿太阳码（3 个圆环定位点 + 放射状数据带 + 中心圆），
-   * 但它**不承载任何可解码数据**，任何扫码器都扫不出内容。
-   * UI 里必须明确标注为「装饰图案」，不能让人误以为它是可用的码。
-   */
-  function renderSunDeco(opts) {
-    const side = opts.size;
-    const cv = document.createElement('canvas');
-    cv.width = side; cv.height = side;
-    const ctx = cv.getContext('2d');
-    const cx = side / 2, cy = side / 2;
-    const R = side * 0.46;                       // 码盘半径
-
-    ctx.fillStyle = opts.light;
-    ctx.fillRect(0, 0, side, side);
-
-    // 码盘（浅色圆底）
-    ctx.fillStyle = opts.softLight || '#f2f4f8';
-    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill();
-
-    ctx.fillStyle = opts.dark;
-
-    // 3 个圆环定位点（位于圆周上，间隔 120°）—— 模仿太阳码/小程序码的牛眼
-    const eyeR = R * 0.17;
-    for (let k = 0; k < 3; k++) {
-      const a = -Math.PI / 2 + k * (2 * Math.PI / 3);
-      const ex = cx + Math.cos(a) * (R - eyeR - side * 0.01);
-      const ey = cy + Math.sin(a) * (R - eyeR - side * 0.01);
-      // 外环
-      ctx.beginPath(); ctx.arc(ex, ey, eyeR, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = opts.light;
-      ctx.beginPath(); ctx.arc(ex, ey, eyeR * 0.66, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = opts.dark;
-      ctx.beginPath(); ctx.arc(ex, ey, eyeR * 0.34, 0, Math.PI * 2); ctx.fill();
-    }
-
-    // 放射状数据带：一圈圈圆点，角向密度随半径变化（观感接近太阳码的"花瓣"）
-    const rnd = (function (seed) {                   // 固定序列的伪随机，保证每次生成一致
-      let s = seed >>> 0;
-      return function () { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
-    })(opts.seed || 12345);
-
-    const r0 = eyeR * 1.6, r1 = R * 0.86;
-    const rows = 22;
-    for (let i = 0; i < rows; i++) {
-      const rr = r0 + (r1 - r0) * (i / (rows - 1));
-      const cells = Math.max(8, Math.round(28 + i * 2.2));   // 越外圈分度越多
-      const dotR = Math.max(1.1, (side / 260) * (0.55 + 0.5 * (i / rows)));
-      for (let c = 0; c < cells; c++) {
-        // 跳过会压到定位点的格子
-        const a = (c / cells) * Math.PI * 2 + i * 0.07;
-        const px2 = cx + Math.cos(a) * rr, py2 = cy + Math.sin(a) * rr;
-        let hitEye = false;
-        for (let k = 0; k < 3; k++) {
-          const ak = -Math.PI / 2 + k * (2 * Math.PI / 3);
-          const ex = cx + Math.cos(ak) * (R - eyeR - side * 0.01);
-          const ey = cy + Math.sin(ak) * (R - eyeR - side * 0.01);
-          if (Math.hypot(px2 - ex, py2 - ey) < eyeR * 1.25) { hitEye = true; break; }
-        }
-        if (hitEye) continue;
-        if (rnd() < 0.46) continue;                  // 疏密
-        ctx.beginPath(); ctx.arc(px2, py2, dotR, 0, Math.PI * 2); ctx.fill();
-      }
-    }
-
-    // 中心圆（头像区）
-    ctx.fillStyle = opts.light;
-    ctx.beginPath(); ctx.arc(cx, cy, R * 0.2, 0, Math.PI * 2); ctx.fill();
-    if (opts.logoText) {
-      ctx.fillStyle = opts.dark;
-      ctx.font = `bold ${Math.floor(R * 0.2)}px sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(opts.logoText.slice(0, 2), cx, cy + R * 0.01);
-    }
-    return cv;
-  }
-
   /* ---------------- UI ---------------- */
 
   function ensurePanel() {
@@ -227,9 +144,6 @@
             <option value="ringstyle" data-i18n="gen.styleRing">太阳码风格（放射圆点，仍可扫）</option>
           </select></label>
       </div>
-      <div class="gen-row">
-        <label data-i18n-title="gen.decoTip" title="生成一张外观模仿太阳码/菊花码的**装饰图案**。注意：它不是真太阳码（微信私有协议无法本地编码），不承载数据，扫不出内容。">
-          <input id="genDeco" type="checkbox"> <span data-i18n="gen.deco">生成太阳码式装饰图案（不可扫，仅外观）</span></label>
       <div class="gen-row">
         <label><span data-i18n="gen.dark">前景色</span> <input id="genDark" type="color" value="#111827"></label>
         <label><span data-i18n="gen.light">背景色</span> <input id="genLight" type="color" value="#ffffff"></label>
@@ -266,7 +180,6 @@
       light: ($('#genLight') || {}).value || '#ffffff',
       margin: Math.max(0, Math.min(10, parseInt(($('#genMargin') || {}).value || '4', 10))),
       logoText: ($('#genLogo') || {}).checked ? (($('#genText') || {}).value || '').trim().slice(0, 2) : '',
-      deco: !!($('#genDeco') || {}).checked,
     };
   }
 
@@ -281,23 +194,13 @@
       return;
     }
     try {
-      let cv;
-      if (o.deco) {
-        // 装饰图案：外观像太阳码，但**不承载数据、扫不出**——必须显式提示
-        cv = renderSunDeco({ size: o.size, dark: o.dark, light: o.light, logoText: o.logoText, seed: 20261006 });
-        if (info) info.textContent = T('gen.decoInfo', { n: o.size });
-        if (warn) { warn.textContent = T('gen.decoWarn'); warn.className = 'hint warn'; }
-        $('#genCanvas').setAttribute('data-deco', '1');
-      } else {
-        const qr = buildMatrix(o.text, o.ec);
-        const n = qr.getModuleCount();
-        cv = render(qr, o);
-        if (info) info.textContent = T('gen.info', { v: ((n - 17) / 4 + 1), n: n, ec: o.ec });
-        if (warn) {
-          warn.textContent = (o.dotStyle === 'ringstyle') ? T('gen.ringWarn') : T('gen.scanWarn');
-          warn.className = 'hint';
-        }
-        $('#genCanvas').removeAttribute('data-deco');
+      const qr = buildMatrix(o.text, o.ec);
+      const n = qr.getModuleCount();
+      const cv = render(qr, o);
+      if (info) info.textContent = T('gen.info', { v: ((n - 17) / 4 + 1), n: n, ec: o.ec });
+      if (warn) {
+        warn.textContent = (o.dotStyle === 'ringstyle') ? T('gen.ringWarn') : T('gen.scanWarn');
+        warn.className = 'hint';
       }
       const target = $('#genCanvas');
       target.width = cv.width; target.height = cv.height;
@@ -324,7 +227,7 @@
   function init() {
     const panel = ensurePanel();
     const go = () => doGenerate();
-    ['#genText', '#genEc', '#genSize', '#genStyle', '#genDark', '#genLight', '#genMargin', '#genLogo', '#genDeco']
+    ['#genText', '#genEc', '#genSize', '#genStyle', '#genDark', '#genLight', '#genMargin', '#genLogo']
       .forEach((s) => { const el = $(s); if (el) el.addEventListener('change', go); });
     const t = $('#genText');
     if (t) t.addEventListener('input', () => { if (t.value.length > 1) go(); });

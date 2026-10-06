@@ -2,7 +2,7 @@
  *  策略：静态资源 cache-first，导航请求 network-first 回退缓存。
  *  注意：Service Worker 只在 http(s) 下生效（file:// 不可用）。
  */
-const CACHE = 'qrsuite-v2.2.9';
+const CACHE = 'qrsuite-v2.3.0';
 const ASSETS = [
   './', './index.html', './style.css', './lang.css', './app.js', './i18n.js', './decode.js', './decode.worker.js',
   './gen.js', './stylized.js',
