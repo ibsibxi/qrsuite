@@ -92,3 +92,24 @@ main a{color:var(--acc)}
 /* 样式化私有码：几何参数行 */
 .dim{font-size:12px;color:var(--mut);margin-top:4px}
 .res.stylized{border-left-color:var(--warn)}
+/* 异形码分类标记：与普通解码结果的徽章区分开 */
+.res.stylized .badge.cat{background:#4a3a1a;color:var(--warn);border-color:#6b5520;margin-left:6px}
+
+/* ============ 生成板块 ============ */
+.gen{margin-top:18px}
+.gen h2{font-size:17px;margin:0 0 6px}
+.gen textarea{width:100%;box-sizing:border-box;background:#0f1626;color:var(--fg);
+  border:1px solid #26324a;border-radius:8px;padding:10px;font-size:14px;font-family:inherit;resize:vertical}
+.gen textarea:focus{outline:none;border-color:var(--acc)}
+.gen-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px;font-size:13px}
+.gen-row label{display:flex;align-items:center;gap:6px;color:var(--mut)}
+.gen-row select,.gen-row input[type=number]{background:#0f1626;color:var(--fg);
+  border:1px solid #26324a;border-radius:6px;padding:5px 7px;font-size:13px}
+.gen-row input[type=color]{width:34px;height:26px;padding:0;border:1px solid #26324a;border-radius:6px;background:none}
+.gen-actions{display:flex;align-items:center;gap:10px;margin-top:12px}
+.gen-actions .hint{color:var(--mut);font-size:12.5px}
+.gen-preview{margin-top:12px;display:flex;justify-content:center}
+.gen-preview canvas{max-width:100%;height:auto;image-rendering:pixelated;
+  border-radius:8px;background:#fff;padding:6px}
+/* 异形码说明块 */
+.stylized-lead{font-size:13px;color:var(--mut);line-height:1.6;margin:0 0 10px}

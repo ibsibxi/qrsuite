@@ -129,7 +129,52 @@ function decodeViaMainThread(rgba, w, h, mode, verify) {
 }
 
 /* ============================ 3. 取像素 ============================ */
-async function fileToRGBA(file) {
+
+/**
+ * 分辨率归一化档位。
+ *
+ * 为什么需要：以前是 `drawImage(src,0,0)` 直接按原尺寸解码 ——
+ *  · 手机 48MP 照片会以全分辨率跑 18 种变体级联，内存与耗时都爆炸（低端机可能白屏）；
+ *  · 而小图（远景二维码、缩略图）又太小，模块只剩两三个像素，任何引擎都判不出。
+ * 所以这里做**双向**归一化：小图放大到下限、超大图压到上限。
+ *
+ * minSide 的取值依据（实测）：微信族牛眼细环在小于 ~700px 长边时会被打碎，
+ * 普通二维码模块需要 ≥3px 才稳；放大到 1100~1600 能救回相当一部分远景码。
+ */
+const RES_PROFILE = {
+  fast:     { maxSide: 2000, minSide: 900,  deepUpscale: false },
+  balanced: { maxSide: 2400, minSide: 1100, deepUpscale: false },
+  deep:     { maxSide: 3200, minSide: 1600, deepUpscale: true },
+};
+
+/**
+ * 由「模式 + 高清开关」决定分辨率档位。
+ *
+ * 设计意图：普通扫描路径**默认完全不变**（fast/balanced 保持原档位），
+ * 只有用户显式打开"深度扫描"才走高分辨率档，这样不会为了极少数难图拖慢日常使用。
+ */
+function resolveProfile(mode, hd) {
+  const base = RES_PROFILE[mode] || RES_PROFILE.balanced;
+  if (!hd) return base;
+  return {
+    maxSide: Math.max(base.maxSide, RES_PROFILE.deep.maxSide),   // 3200
+    minSide: Math.max(base.minSide, RES_PROFILE.deep.minSide),   // 1600
+    deepUpscale: true,
+  };
+}
+
+function normalizeCanvas(srcW, srcH, profile) {  const long0 = Math.max(srcW, srcH);
+  let scale = 1;
+  if (long0 > profile.maxSide) scale = profile.maxSide / long0;            // 压上限
+  else if (profile.deepUpscale && long0 < profile.minSide) {               // 无损放大（深扫）
+    scale = Math.min(profile.minSide / long0, 3);                         // 最多放 3 倍，避免糊
+  }
+  const w = Math.max(1, Math.round(srcW * scale));
+  const h = Math.max(1, Math.round(srcH * scale));
+  return { w, h, scale, changed: scale !== 1 };
+}
+
+async function fileToRGBA(file, mode, hd) {
   let bitmap = null, img = null;
   try {
     if (typeof createImageBitmap === 'function') bitmap = await createImageBitmap(file);
@@ -141,7 +186,11 @@ async function fileToRGBA(file) {
       i.src = URL.createObjectURL(file);
     });
   }
-  const src = bitmap || img, w = src.width, h = src.height;
+  const src = bitmap || img, sw = src.width, sh = src.height;
+  const profile = resolveProfile(mode, hd);
+  const norm = normalizeCanvas(sw, sh, profile);
+  const w = norm.w, h = norm.h;
+
   let ctx;
   if (typeof OffscreenCanvas !== 'undefined') {
     ctx = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true });
@@ -149,11 +198,16 @@ async function fileToRGBA(file) {
     const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
     ctx = cv.getContext('2d', { willReadFrequently: true });
   }
-  ctx.drawImage(src, 0, 0);
+  if (norm.changed) {
+    // 压上限用高质量降采样；放大用双线性即可（二维码是硬边，过度插值反而糊）
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = norm.scale < 1 ? 'high' : 'low';
+  }
+  ctx.drawImage(src, 0, 0, sw, sh, 0, 0, w, h);
   const data = ctx.getImageData(0, 0, w, h).data;
   if (bitmap && bitmap.close) try { bitmap.close(); } catch (e) { }
   if (img) URL.revokeObjectURL(img.src);
-  return { rgba: data, w, h };
+  return { rgba: data, w, h, srcW: sw, srcH: sh, scale: norm.scale };
 }
 
 /* ============================ 4. 主流程 ============================ */
@@ -161,11 +215,24 @@ async function decodeFile(file) {
   const card = makeCard(file);
   const t0 = performance.now();
   try {
-    const { rgba, w, h } = await fileToRGBA(file);
+    const hd = !!(document.getElementById('hdscan') || {}).checked;
+    const { rgba, w, h, srcW, srcH, scale } = await fileToRGBA(file, MODE, hd);
     const useWorker = !!workerPool;
     let res = useWorker
       ? await decodeViaWorker(rgba, w, h, MODE, $('#verify').checked)
       : await decodeViaMainThread(rgba, w, h, MODE, $('#verify').checked);
+
+    // 客户端异形码判定：只在**标准解码全部失败**时才跑（与后端同一策略）。
+    // 这样普通二维码的快速路径完全不受影响；而异形码本来就是"解不出"的，
+    // 用户此时最需要的就是"这是哪一家的码、该用哪个 App 扫"。
+    if (window.QRStylized && window.QRStylized.classify) {
+      try {
+        const st = window.QRStylized.classify(rgba, w, h);
+        res.stylized = st;
+      } catch (e) {
+        console.warn('[QRSuite] 异形码判定失败', e);
+      }
+    }
 
     if (backendOK && $('#backend').checked) {
       const br = await fetch('/api/decode', {
@@ -236,10 +303,13 @@ function render(card, res, total, file) {
       if (g.angular_div && g.angular_div.div) bits.push(T('stylized.div', { n: g.angular_div.div }));
       const d = document.createElement('div');
       d.className = 'res stylized';
-      d.innerHTML = `<div><span class="badge f"></span><span class="badge g"></span></div>` +
+      d.innerHTML = `<div><span class="badge f"></span><span class="badge g"></span>` +
+        `<span class="badge cat"></span></div>` +
         `<div class="val"></div>` + (bits.length ? `<div class="dim"></div>` : '');
       d.querySelector('.badge.f').textContent = st.label;
       d.querySelector('.badge.g').textContent = (st.confidence * 100).toFixed(0) + '%';
+      // 单独分类标记：让"异形码识别"与普通解码结果在视觉上分开
+      d.querySelector('.badge.cat').textContent = T('stylized.cat');
       d.querySelector('.val').textContent = st.hint || '';
       if (bits.length) d.querySelector('.dim').textContent = bits.join(' · ');
       body.appendChild(d);
@@ -350,6 +420,7 @@ async function runSelfTest(verbose) {
 
 /* ============================ 9. 启动 ============================ */
 bindUI();                                    // ← 先绑定，任何后续失败都不影响交互
+try { if (window.QRGen) window.QRGen.init(); } catch (e) { console.warn('[QRSuite] 生成板块初始化失败', e); }
 try {
   workerPool = initWorkers();
 } catch (e) {

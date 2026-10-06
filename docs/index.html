@@ -48,6 +48,8 @@
         <option value="deep" data-i18n="mode.deep">深度（全部变体，最难图）</option>
       </select>
     </label>
+    <label data-i18n-title="opt.hdTip" title="用更高分辨率跑（超大图压到 3200、小图自动放大到 1600），显著提高远景/小码识别率，代价是耗时与内存上升">
+      <input id="hdscan" type="checkbox"> <span data-i18n="opt.hd">深度扫描（高清，更慢）</span></label>
     <label data-i18n-title="opt.verifyTip" title="要求 2 个引擎结果一致才判定成功，可降低误读"><input id="verify" type="checkbox"> <span data-i18n="opt.verify">交叉验证</span></label>
     <button id="selftest" data-i18n-title="opt.selftestTip" title="在浏览器内生成一张二维码再解码，验证整条链路" data-i18n="opt.selftest">🧪 自检</button>
     <span id="backend-row" style="display:none">
@@ -83,7 +85,13 @@
 <script src="i18n.js"></script>
 <script src="vendor/jsQR.js"></script>
 <script src="vendor/zxing.min.js"></script>
+<!-- 生成库（MIT，本地打包）：主库必须在前，UTF-8 编码器紧随其后覆盖 stringToBytes，
+     否则中文会按 Shift-JIS 编错（实测确认） -->
+<script src="vendor/qrcode-generator.js"></script>
+<script src="vendor/qrcode-generator-utf8.js"></script>
 <script src="decode.js"></script>
+<script src="stylized.js"></script>
+<script src="gen.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
