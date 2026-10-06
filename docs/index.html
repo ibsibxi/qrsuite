@@ -33,6 +33,15 @@
        若挂上 data-i18n，i18n.apply() 会在 DOMContentLoaded 时把它覆盖回静态文案。 -->
   <div id="env" class="env">正在初始化…</div>
 
+  <!-- 两个功能区用标签页分开：解析（识别）与 生成（制作）。
+       此前它们混在同一页里，生成板块还把识别结果挤到折叠线以下。 -->
+  <nav class="tabs" role="tablist">
+    <button id="tab-decode" class="tab on" role="tab" aria-selected="true" data-i18n="tab.decode">🔍 解析二维码</button>
+    <button id="tab-gen" class="tab" role="tab" aria-selected="false" data-i18n="tab.generate">✏️ 生成二维码</button>
+  </nav>
+
+  <div id="pane-decode" class="pane on" role="tabpanel">
+
   <section id="drop" tabindex="0">
     <div class="big">🖼️</div>
     <div class="t" data-i18n="drop.title">拖拽图片到这里，或点击选择文件</div>
@@ -72,6 +81,11 @@
     </div>
     <div id="hlist"></div>
   </section>
+
+  </div><!-- /#pane-decode -->
+
+  <div id="pane-gen" class="pane" role="tabpanel"></div>
+
 </main>
 
 <footer>

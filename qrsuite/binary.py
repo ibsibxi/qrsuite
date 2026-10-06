@@ -148,23 +148,34 @@ def extract_runs(s: str, min_len: int = 4, limit: int = 12) -> list:
     seen = set()
     for m in _RUN_BYTES_RE.finditer(bytes(raw)):
         r = m.group().decode('ascii')
-        # 过滤掉明显是转义写法的片段（zxing-cpp 会把不可打印字节渲染成
-        # "<SOH>"、"<U+81>" 这类字面文本，它们不是可读内容）。
         if len(r) < min_len or r in seen:
             continue
+        # 过滤转义记号（zxing-cpp 会把不可打印字节渲染成 "<SOH>"、"<U+81>" 这类字面文本）
         if _ESCAPE_TOKEN_RE.search(r):
             continue
-        # 片段里若混有大量 "<XXX>" 形式的记号，也不给用户看
         if re.search(r'<[A-Z][A-Z0-9]{1,5}>', r) or re.search(r'<U\+[0-9A-Fa-f]{2,6}>', r):
             continue
-        # 要求足够比例的字母/数字，纯符号片段没有信息量
-        alnum = sum(1 for c in r if c.isalnum())
-        if alnum / len(r) < 0.4:
+        # ① 优先从片段里抽出纯数字子串（最可能是凭证 ID / 票号），
+        #    这样 "2088732564945072j" 这种带尾巴的也能规整成干净 ID
+        m_num = re.search(r'\d{8,}', r)
+        if m_num:
+            val = m_num.group(0)
+            if val in seen:
+                continue
+            seen.add(val)
+            out.append(val)
+            if len(out) >= limit:
+                break
             continue
-        seen.add(r)
-        out.append(r)
-        if len(out) >= limit:
-            break
+        # ② 长字母数字串（订单号之类）
+        alnum = sum(1 for c in r if c.isalnum())
+        if len(r) >= 12 and alnum / len(r) >= 0.85:
+            if r in seen:
+                continue
+            seen.add(r)
+            out.append(r)
+            if len(out) >= limit:
+                break
     return out
 
 

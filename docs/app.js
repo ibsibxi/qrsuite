@@ -212,6 +212,8 @@ async function fileToRGBA(file, mode, hd) {
 
 /* ============================ 4. 主流程 ============================ */
 async function decodeFile(file) {
+  // 结果只出现在「解析」页，所以先切回去，否则用户会以为没反应
+  if (window.__qrShowDecodeTab) window.__qrShowDecodeTab();
   const card = makeCard(file);
   const t0 = performance.now();
   try {
@@ -303,11 +305,17 @@ function isBinaryText(s) {
   return false;
 }
 
-/** 把二进制 payload 还原成可读片段（连续可打印 ASCII，长度 ≥ 6）。 */
+/** 把二进制 payload 还原成**真正可读**的片段。
+ *
+ *  过滤很重要：二进制里随便一段字母数字混合的短串（如 "We~?z%?5"）没有信息量，
+ *  直接展示只会让用户觉得还是乱码。只保留两类高置信片段：
+ *    ① 长度 ≥ 8 的纯数字串（凭证 ID、票号）
+ *    ② 长度 ≥ 12 且字母数字占比 ≥ 85% 的串（订单号、编码）
+ *  另外剔除含转义记号（<SOH>/<U+81>）与问号占位的片段。
+ */
 function binaryRuns(s, limit) {
   const out = [];
   const seen = new Set();
-  // 先按单字节还原（解码器直译字节时正是这个映射），再找回连续可打印段
   let bytes = '';
   for (let i = 0; i < s.length; i++) {
     const o = s.charCodeAt(i);
@@ -319,10 +327,26 @@ function binaryRuns(s, limit) {
   let m;
   while ((m = re.exec(bytes)) !== null) {
     const r = m[0];
-    if (seen.has(r) || (r[0] === '<' && r[r.length - 1] === '>')) continue;
-    seen.add(r);
-    out.push(r);
-    if (out.length >= (limit || 4)) break;
+    if (seen.has(r)) continue;
+    if (/[?]/.test(r)) continue;                                  // 含占位符，说明有非 ASCII 混杂
+    if (/<[A-Z][A-Z0-9]{1,5}>/.test(r) || /<U\+[0-9A-Fa-f]{2,6}>/.test(r)) continue;
+    const digits = (r.match(/\d/g) || []).length;
+    const alnum = (r.match(/[A-Za-z0-9]/g) || []).length;
+    // ① 从片段里优先抽出纯数字子串（最可能是凭证 ID / 票号），
+    //    这样 "2088732564945072j" 这种带尾巴的也能规整成干净 ID
+    const num = r.match(/\d{8,}/);
+    if (num) {
+      if (seen.has(num[0])) continue;
+      seen.add(num[0]);
+      out.push(num[0]);
+      if (out.length >= (limit || 4)) break;
+      continue;
+    }
+    if (r.length >= 12 && alnum / r.length >= 0.85) {     // ② 长字母数字串（订单号之类）
+      seen.add(r);
+      out.push(r);
+      if (out.length >= (limit || 4)) break;
+    }
   }
   return out;
 }
@@ -507,6 +531,29 @@ async function runSelfTest(verbose) {
 /* ============================ 9. 启动 ============================ */
 bindUI();                                    // ← 先绑定，任何后续失败都不影响交互
 try { if (window.QRGen) window.QRGen.init(); } catch (e) { console.warn('[QRSuite] 生成板块初始化失败', e); }
+
+/* ---------------- 标签页：解析 / 生成 ---------------- */
+function setTab(name) {
+  const isGen = (name === 'gen');
+  const td = document.getElementById('tab-decode'), tg = document.getElementById('tab-gen');
+  const pd = document.getElementById('pane-decode'), pg = document.getElementById('pane-gen');
+  if (!td || !tg || !pd || !pg) return;
+  td.classList.toggle('on', !isGen); tg.classList.toggle('on', isGen);
+  td.setAttribute('aria-selected', String(!isGen));
+  tg.setAttribute('aria-selected', String(isGen));
+  pd.classList.toggle('on', !isGen); pg.classList.toggle('on', isGen);
+  try { localStorage.setItem('qrsuite.tab', isGen ? 'gen' : 'decode'); } catch (e) { }
+}
+(function initTabs() {
+  const td = document.getElementById('tab-decode'), tg = document.getElementById('tab-gen');
+  if (td) td.addEventListener('click', () => setTab('decode'));
+  if (tg) tg.addEventListener('click', () => setTab('gen'));
+  let saved = 'decode';
+  try { saved = localStorage.getItem('qrsuite.tab') || 'decode'; } catch (e) { }
+  setTab(saved);
+})();
+// 解码开始时自动切回「解析」页，否则用户点了生成页再拖图会看不到结果
+window.__qrShowDecodeTab = () => setTab('decode');
 try {
   workerPool = initWorkers();
 } catch (e) {

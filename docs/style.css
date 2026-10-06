@@ -99,6 +99,15 @@ main a{color:var(--acc)}
 .res.binary .badge.cat{background:#2c2450;color:#a99cff;border-color:#4a3d80;margin-left:6px}
 .res.binary .val{white-space:pre-wrap;word-break:break-all}
 
+/* ============ 标签页：解析 / 生成 ============ */
+.tabs{display:flex;gap:8px;margin:14px 0 4px}
+.tab{flex:1;padding:11px 12px;border-radius:10px;background:#141c2e;color:var(--mut);
+  border:1px solid #26324a;font-size:14px;font-family:inherit;cursor:pointer;transition:.15s}
+.tab:hover{border-color:#3a4a6a;color:var(--fg)}
+.tab.on{background:#1b2740;color:var(--fg);border-color:var(--acc);font-weight:600}
+.pane{display:none}
+.pane.on{display:block}
+
 /* ============ 生成板块 ============ */
 /* 关键：生成面板复用了 .card 类，而 .card 是 `grid-template-columns:92px 1fr`
    （为结果卡片的缩略图列设计）。若不覆盖，textarea 会被塞进 92px 那一列，

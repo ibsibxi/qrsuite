@@ -96,6 +96,9 @@
   'binary.tag': '二进制数据',
   'binary.note': '解出了 {n} 字节的二进制数据（可打印占比 {p}%）—— 这不是文本，无法按文字显示。常见于乘车码、电子票据这类加密令牌。',
   'binary.runs': '其中的可读片段:',
+  // 标签页
+  'tab.decode': '🔍 解析二维码',
+  'tab.generate': '✏️ 生成二维码',
       'meta.decoded': '{w}×{h} · 解出 {n} 条 · {ms}ms · {stages} 阶段{early}{tag}',
       'meta.early': ' · 早退',
       'btn.copy': '复制',
@@ -213,6 +216,9 @@
   'binary.tag': 'Binary data',
   'binary.note': 'Decoded {n} bytes of binary data ({p}% printable) — this is not text and cannot be shown as characters. Typical of transit codes and encrypted tickets.',
   'binary.runs': 'Readable fragments:',
+  // Tabs
+  'tab.decode': '🔍 Decode',
+  'tab.generate': '✏️ Generate',
       'meta.decoded': '{w}×{h} · {n} result(s) · {ms}ms · {stages} stages{early}{tag}',
       'meta.early': ' · early exit',
       'btn.copy': 'Copy',
