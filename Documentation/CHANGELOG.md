@@ -27,10 +27,9 @@
 
 ### 文档 Docs
 
-- 本节初稿经过一轮转义处理后损坏了：反引号变成反斜杠，而 `\t`、`\v`、`\a`、`\r` 又被当作转义
-  序列吃掉，连带吞掉 `tools`、`v*`、`apply()`、`res/values-en` 与 CSS 的 `a` 等 token。
-  已逐条对照 `docs/i18n.js`（78 个键）、`res/values-en` 与 `.github/workflows/` 三个文件还原核对。
-
+- 本节初稿曾被一轮转义处理损坏：反引号变成反斜杠，而 `\t`、`\v`、`\a`、`\r` 这些序列又被
+  转义吃掉，连带吞掉 `tools`、`v*`、`apply()`、`res/values-en` 与 CSS 的 `a` 等 token。
+  现已逐条对着源码与 `.github/workflows/` 还原并核对。
 
 ---
 
@@ -66,12 +65,57 @@
 - **两定位符几何重建**（参考 qqAys/Robust-QR-Code-Detector）：定位符检测严重误报（干净图也报 4~19 个），
   产出数百无效组合、0 命中；需严格的 1:1:3:1:1 扫描线校验才可用，投入大且收益不确定，未并入。
 
+### 文档 Docs（准确性订正）
+
+逐条对着源码核了一遍，改掉几处「文档说的和代码做的不一样」：
+
+- **`--verify` 的真实语义**：它只是把「命中即停」推迟到有两个引擎给出同一内容（`core.py` 的
+  `if hits:` 分支），**不会过滤掉单引擎的结果**。此前 README / MANUAL / 本文件 2.0.0 那条
+  「需 ≥2 引擎一致才判定成功」是错的，容易让人以为它是正确性开关。
+- **两个「v1」不再混用**：基准表里的 v1 是重构前的 **Python 原型**（13 张 × 18 变体 = 234 阶段正好对上），
+  不是 Rust 原作。Rust 原作是 10 变体 + 4 角落裁剪、单引擎 bardecoder，**本来就命中即停**、只解 QR，
+  所以「11×」与它无关。
+- **码制范围按端拆开写**：一维码确实能扫（Python 靠 zxing + zbar，浏览器靠内置 ZXing-js 的
+  `MultiFormatReader`——它没设 `POSSIBLE_FORMATS`，等于全部已注册读取器都试）。
+  Micro QR 浏览器有读取器（上游标注「待验证」）而 Android ❌；DX Film Edge、Telepen **只有** Python 的
+  zxing 能解（DataBar/RSS 则是 zxing 与 zbar 都能解）。
+  原表把「ITF、Codabar、DX Film Edge」整行标成浏览器 ✅ 是错的。
+- **GitHub Pages 工作流不存在**：当时 `.github/workflows/` 只有 `android.yml`，Pages 走 branch 直发；
+  已从 README / MANUAL / ARCHITECTURE 删掉对 `pages.yml` 的引用。（2.0.4 又补了 `release.yml`
+  与 `windows.yml`，但仍**没有** Pages 部署工作流。）
+- **本机增强引擎只在同源时探测得到**：前端用相对路径打 `/health`，部署到 Pages 后即使本机服务在跑也连不上。
+- **Python 与前端是两套实现**：变体清单已分叉（JS 无 >1800px 降采样闸门，缺 CLAHE / 自适应阈值 / 模糊+二值化，
+  多了逐通道 R/G/B），不再是「同一套策略」。
+- **CLI 行为订正**：`--dir` 是空参数（目录本来就自动递归）；`--engines` 是与所选模式的引擎表**取交集**，
+  所以 `--engines wechat` 必须配 `--mode deep`；`--model-dir` 不影响 `--fetch-models` 的下载目录。
+- **阶段编号与「惰性生成」**：`decode_arrays()` 先 `list()` 物化整条序列再截断，早退省的是引擎调用，
+  没省掉后续变体的构造；大图是 16 个变体而非 18。
+- `tests/bench.py` 找不到 v1 脚本时会打印 `[skip]`，但底部的「×× 提升」仍以 **v2 fast** 作基线。
+  脚本本身没改，README 已注明此时那组数字不是与 v1 的对比。
+- Android README：versionName 对齐当时的 2.0.3（2.0.4 已再次上调），签名说明改为「正式证书优先、
+  缺失时静默回退 debug」，并注明 `android.yml` 只产 debug APK（release 由 2.0.4 的 `release.yml` 接管）。
+
+### 文档结构重组 Docs（restructure）
+
+- **README 只留门面**：项目是什么、能做什么、怎么跑起来、文档地图。性能基准表、级联策略、码制矩阵、
+  目录结构、与原作关系、Roadmap 全部搬出。
+- **散文文档集中到 `Documentation/`**：`MANUAL.md`、`CHANGELOG.md`、`THIRD_PARTY_NOTICES.md` 从根目录迁入；
+  `ARCHITECTURE.md` 从 `docs/` 迁出（那里是 GitHub Pages 站点根目录，文档混进去会被当成网页的一部分）；
+  `tools/NOTES-stylized-codes.md` 也并入。`docs/` 现在只放静态站与生成的 `manual.html`。
+- **新增三份文档**：`BENCHMARK.md`（实测数字的唯一出处，避免 README / MANUAL 各存一份对不上）、
+  `LINEAGE.md`（Rust 原作 / Python 原型 / v2 三层关系与取舍）、`ROADMAP.md`（待办 / 已完成 / 明确不做）。
+- **去重**：MANUAL 的目录结构一节与性能表改为指向 ARCHITECTURE / BENCHMARK，不再复制。
+- `tools/build_manual.py` 的源路径随迁移改为 `Documentation/MANUAL.md`，产物仍是 `docs/manual.html`。
+
 ### 已知限制 Known limitations
 
 - 仍无法解码**整行定位符丢失**的严重残缺码（如底部被裁 20%，`j_long_cropped20.png`）——
   这需要真正的几何重建能力，属当前边界。
-- 版本号字符串（`qrsuite/__init__.py`、`docs/sw.js`、`app/build.gradle`、README 徽标）尚未统一升到 2.0.3，
-  留待下次一并处理；CHANGELOG 与 `qrsuite/winapp.py` 的 `--version` 输出可能暂时不一致。
+- **版本号其实是三个互不相干的数**（此前「已统一到 2.0.3 / 四处一起改」的说法是我写错的，
+  那次还顺手把 PWA 缓存名从 `qrsuite-v2.0.4` 降回了 `v2.0.3`，已回退）：
+  `qrsuite/__init__.py` = 2.0.3、Android `versionName` = 2.0.4、`docs/sw.js` 的 `CACHE` = `qrsuite-v2.0.7`。
+  缓存名只是 cache-buster，**只增不减**，不跟版本走；发版时真正要动的是前两个，
+  外加 `docs/manual.html` 记得用 `python tools/build_manual.py` 重新生成。
 
 ---
 
@@ -109,6 +153,7 @@
 - `run.bat` 菜单式入口（网页版 / 交互 / 快速 / 深度 / 下载模型 / 基准）
 - 测试：`tests/smoke_test.py`（引擎可用性 + 端到端 + 早退行为）、`tests/bench.py`（v1 与 v2 性能精度对比）
 - 文档：`README.md`、`MANUAL.md`（+ 网页版 `docs/manual.html`，构建脚本 `tools/build_manual.py`）
+  ——以下 2.0.0 各处提到的路径是**当时**的位置，散文文档现已迁到 `Documentation/`
 - 仓库：`LICENSE`(MIT)、`THIRD_PARTY_NOTICES.md`、`.gitignore`、`.gitattributes`、GitHub Actions Pages 工作流
 
 ### 性能 Performance
@@ -140,7 +185,7 @@
 
 - 原版 `QRCodeScanner.exe` **仍可作为 `original` 引擎挂载**使用（`--original-exe` 或环境变量 `QRSUITE_ORIGINAL_EXE`），仅在 `deep` 模式对本地文件生效
 - **破坏性变更**：入口由 `python qrsuite.py` 改为 `python -m qrsuite`；原 `qrweb.py` 由 `python -m qrsuite --serve` 取代（旧文件保留亦不受影响）
-- 未随仓库分发任何第三方二进制；模型文件与 v1 exe 需自备（见 `MANUAL.md` 第 6 章）
+- 未随仓库分发任何第三方二进制；模型文件与 v1 exe 需自备（见 `Documentation/MANUAL.md` 第 6 章）
 
 ### 已知限制 Known limitations
 

@@ -85,8 +85,10 @@ hr{border:none;border-top:1px solid var(--line);margin:28px 0}
 </table>
 <hr />
 <h2 id="1">1. 这是什么，能识别什么</h2>
-<p>QRSuite 把「解码引擎」和「输入方式」拆开组合：<strong>同一套级联策略</strong>，既能在 Python 里跑（高精度），也能在浏览器里跑（零安装）。</p>
+<p>QRSuite 把「解码引擎」和「输入方式」拆开组合：<strong>同一套级联思路在两边各写一遍</strong>（Python 与浏览器
+不共享代码，变体清单也已有差异），既能在 Python 里跑（高精度），也能在浏览器里跑（零安装）。</p>
 <h3 id="_2">支持的码制</h3>
+<p>一维码（条形码）和二维码都能读，但<strong>三端覆盖范围不同</strong>——差别集中在 Micro QR 和最后两行：</p>
 <table>
 <thead>
 <tr>
@@ -94,18 +96,28 @@ hr{border:none;border-top:1px solid var(--line);margin:28px 0}
 <th>格式</th>
 <th>浏览器版</th>
 <th>Python 版</th>
+<th>Android 版</th>
 </tr>
 </thead>
 <tbody>
 <tr>
 <td>二维码</td>
-<td>QR Code、Micro QR</td>
+<td>QR Code</td>
+<td>✅</td>
 <td>✅</td>
 <td>✅</td>
 </tr>
 <tr>
 <td>二维码</td>
+<td>Micro QR</td>
+<td>⚠️（ZXing-js 有读取器，上游标为「待验证」）</td>
+<td>✅（zxing-cpp）</td>
+<td>❌（ML Kit 不支持）</td>
+</tr>
+<tr>
+<td>二维码</td>
 <td>Data Matrix</td>
+<td>✅</td>
 <td>✅</td>
 <td>✅</td>
 </tr>
@@ -114,10 +126,12 @@ hr{border:none;border-top:1px solid var(--line);margin:28px 0}
 <td>Aztec</td>
 <td>✅</td>
 <td>✅</td>
+<td>✅</td>
 </tr>
 <tr>
 <td>二维码</td>
 <td>PDF417</td>
+<td>✅</td>
 <td>✅</td>
 <td>✅</td>
 </tr>
@@ -126,22 +140,46 @@ hr{border:none;border-top:1px solid var(--line);margin:28px 0}
 <td>Code 128 / Code 39 / Code 93</td>
 <td>✅</td>
 <td>✅</td>
+<td>✅</td>
 </tr>
 <tr>
 <td>一维码</td>
 <td>EAN-8/13、UPC-A/E</td>
 <td>✅</td>
 <td>✅</td>
+<td>✅</td>
 </tr>
 <tr>
 <td>一维码</td>
-<td>ITF、Codabar、DX Film Edge</td>
+<td>ITF、Codabar</td>
+<td>✅</td>
 <td>✅</td>
 <td>✅</td>
 </tr>
+<tr>
+<td>一维码</td>
+<td>DataBar / RSS-14 / RSS Expanded</td>
+<td>⚠️（ZXing-js 名义支持，上游标「待验证」，本仓库未做样例实测）</td>
+<td>✅（zxing-cpp；RSS 系列 zbar 也能解）</td>
+<td>❌</td>
+</tr>
+<tr>
+<td>一维码</td>
+<td>DX Film Edge、Telepen</td>
+<td>❌</td>
+<td>✅（仅 zxing-cpp，需 2.2+）</td>
+<td>❌</td>
+</tr>
 </tbody>
 </table>
-<h3 id="_3">四个解码引擎（并联，结果去重）</h3>
+<blockquote>
+<p>浏览器侧的码制范围由仓库内置的 <code>docs/vendor/zxing.min.js</code>（@zxing/library 0.23.0）决定，
+它没有 <code>POSSIBLE_FORMATS</code> 限制时会把已注册的读取器全试一遍；标 ⚠️ 的几项是上游自己声明
+「尚未充分验证」的，真用到关键流程前请先拿样例图实测。
+Android 侧由 <code>MainActivity</code> 里 <code>BarcodeScannerOptions</code> 注册的格式决定（不含 Micro QR）。
+Python 侧 <code>cv2</code> / <code>wechat</code> / <code>original</code> 三个引擎<strong>只解 QR</strong>，一维码靠 <code>zxing</code> 与 <code>zbar</code>。</p>
+</blockquote>
+<h3 id="_3">引擎一览（并联，结果按内容去重）</h3>
 <table>
 <thead>
 <tr>
@@ -154,22 +192,27 @@ hr{border:none;border-top:1px solid var(--line);margin:28px 0}
 <tr>
 <td><strong>zxing-cpp</strong></td>
 <td>Python</td>
-<td>主力，码制最全、识别率最高</td>
+<td>主力，码制最全、识别率最高（DX Film Edge、Telepen 只有它能解）</td>
 </tr>
 <tr>
 <td><strong>OpenCV QRCodeDetector</strong></td>
 <td>Python</td>
-<td>抗噪、抗低质量，常与 zxing 互补</td>
+<td>抗噪、抗低质量，常与 zxing 互补；<strong>只解 QR</strong></td>
 </tr>
 <tr>
 <td><strong>zbar (pyzbar)</strong></td>
 <td>Python</td>
-<td>一维码稳健</td>
+<td>一维码稳健；QR 也能解</td>
 </tr>
 <tr>
-<td><strong>bardecoder（v1 原程序）</strong></td>
+<td><strong>WeChatQRCode</strong></td>
 <td>Python（可选）</td>
-<td>兼容你朋友那一版的多预处理链路</td>
+<td>小图/模糊码兜底；<strong>只解 QR</strong>，代价高，deep 模式才补跑</td>
+</tr>
+<tr>
+<td><strong>original（Rust 原作 QRCodeScanner.exe）</strong></td>
+<td>Python 起子进程（可选）</td>
+<td>走原作那条「10 变体 + 4 角落裁剪」链路兜底，只解 QR，慢</td>
 </tr>
 <tr>
 <td><strong>jsQR</strong></td>
@@ -179,7 +222,7 @@ hr{border:none;border-top:1px solid var(--line);margin:28px 0}
 <tr>
 <td><strong>ZXing-js</strong></td>
 <td>浏览器</td>
-<td>浏览器侧的多码制选手</td>
+<td>浏览器侧的多码制选手（含 Micro QR，不含 DX Film Edge）</td>
 </tr>
 </tbody>
 </table>
@@ -188,7 +231,7 @@ hr{border:none;border-top:1px solid var(--line);margin:28px 0}
 <h3 id="21">2.1 只用网页版（推荐）</h3>
 <ul>
 <li><strong>不需要安装任何东西</strong>。双击 <code>docs/index.html</code> 即可（Chrome / Edge / Firefox / Safari 现代版本）。</li>
-<li>想用「本机增强引擎」（OpenCV / zbar / bardecoder）才需要 Python。</li>
+<li>想用「本机增强引擎」（OpenCV / zbar / WeChatQRCode）才需要 Python。</li>
 </ul>
 <h3 id="22-python">2.2 用 Python 版</h3>
 <pre><code class="language-bash"># 1) 确认 Python
@@ -301,22 +344,34 @@ python -m qrsuite --serve
 </tr>
 <tr>
 <td><strong>均衡</strong>（默认）</td>
-<td>前 7 个阶段</td>
+<td>前 7 个阶段（顺序见下方说明，含反色；大图还能走到旋转与中心裁剪）</td>
 <td>~80 ms/张</td>
 <td>日常万能，命中即停</td>
 </tr>
 <tr>
 <td><strong>深度</strong></td>
-<td>全部 13+ 个变体</td>
+<td>全部阶段（另含逐通道 Otsu、四角裁剪、锐化）</td>
 <td>0.5~1.5 s/张</td>
 <td>模糊、反色、倾斜、局部损坏的疑难图</td>
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p>这里的阶段清单是<strong>浏览器端</strong>（<code>docs/decode.js</code>）自己的：
+<code>原图 → Otsu →（小图才）放大2× → 反色 →（彩色图才）通道 R/G/B → 通道 R/G/B + Otsu → 旋转 90/180/270° → 中心裁剪 → 四角裁剪 → 锐化</code>。
+所以「均衡」在一张大图灰度码上大约试到 中心裁剪，在一张小尺寸彩色图上大约试到 通道 B 就停了。
+<strong>Python 命令行端的清单不一样</strong>（多 CLAHE / 自适应阈值 / 模糊+二值化，少逐通道变体，且大图先降到 1800px），
+它的「均衡」只有 原图/灰度/Otsu/CLAHE/反色/自适应阈值/模糊+二值化，<strong>旋转和裁剪要 <code>--mode deep</code> 才会试</strong>。</p>
+</blockquote>
 <p>页面上的「阶段」就是本次实际尝试的预处理变体数量——<strong>数字越小说明越早命中</strong>（页面上会标注「早退」）。</p>
 <h3 id="34">3.4 交叉验证</h3>
-<p>勾选 <strong>交叉验证</strong> 后，必须<strong>两个引擎给出相同内容</strong>才判定成功。
-适合场景：内容要拿去做敏感操作（付款、登录），宁可失败也不接受误读。</p>
+<p>勾选 <strong>交叉验证</strong> 后，命中不再是「第一个引擎解出就停」，而是<strong>推迟到有两个引擎给出相同内容才停</strong>，
+用来确认结果不是单引擎的误读。</p>
+<blockquote>
+<p>要说清楚它<strong>做不到</strong>的事：如果跑完全部阶段始终只有单个引擎解出，结果<strong>仍会照常返回</strong>，
+并不会因为「凑不齐两个引擎」而判为失败。所以它是「更晚停、更多重复确认」，不是硬性的正确性门槛。
+适合场景：内容要拿去做敏感操作（付款、登录），宁可多花点时间确认，也别拿一个可疑字符串去执行。</p>
+</blockquote>
 <h3 id="35">3.5 本机增强引擎（只有本地服务才有）</h3>
 <p>用 <code>python -m qrsuite --serve</code> 打开时，页面会自动探测到后端，多出一个开关：</p>
 <ul>
@@ -404,11 +459,14 @@ python -m qrsuite D:\pics --mode fast -v
 # 结果存 JSON
 python -m qrsuite D:\pics --json result.json
 
-# 交叉验证（需 ≥2 引擎一致）
+# 交叉验证（推迟早退：直到有 ≥2 引擎给出同一内容才停）
 python -m qrsuite qr.png --verify
 
 # 只用一个引擎（排障用）
 python -m qrsuite qr.png --engines zxing
+
+# 只让微信引擎干活（必须配 --mode deep，否则见 4.3 的说明）
+python -m qrsuite qr.png --mode deep --engines wechat
 
 # 交互式（不带参数时，回车后输入路径或 URL，多个用逗号分隔）
 python -m qrsuite
@@ -435,12 +493,12 @@ python -m qrsuite
 </tr>
 <tr>
 <td><code>--verify</code></td>
-<td>交叉验证：需 ≥2 引擎一致才判定成功</td>
+<td>交叉验证：推迟「命中即停」，直到有 ≥2 引擎给出同一内容；始终只有单引擎结果时也会照常返回</td>
 <td>关</td>
 </tr>
 <tr>
 <td><code>--engines LIST</code></td>
-<td>只启用指定引擎，逗号分隔：<code>zxing,cv2,zbar,wechat,original</code></td>
+<td>只启用指定引擎，逗号分隔：<code>zxing,cv2,zbar,wechat,original</code>。注意它是与<strong>当前模式所用引擎</strong>取交集：<code>wechat</code>/<code>original</code> 只在 <code>deep</code> 的模式表里，所以 <code>--engines wechat</code> 要配 <code>--mode deep</code>，否则一个引擎都不会跑</td>
 <td>全部可用引擎</td>
 </tr>
 <tr>
@@ -450,7 +508,7 @@ python -m qrsuite
 </tr>
 <tr>
 <td><code>--dir</code></td>
-<td>把参数当目录处理（<code>paths</code> 已是目录时也自动递归）</td>
+<td>保留参数，<strong>当前版本不改变行为</strong>：<code>paths</code> 里给目录本来就会递归</td>
 <td>关</td>
 </tr>
 <tr>
@@ -490,11 +548,15 @@ python -m qrsuite
 </tr>
 <tr>
 <td><code>--model-dir PATH</code></td>
-<td>WeChatQRCode 模型目录</td>
+<td>WeChatQRCode 模型目录（供<strong>识别时</strong>加载）</td>
 <td><code>qrsuite/wechat_models</code></td>
 </tr>
 </tbody>
 </table>
+<blockquote>
+<p><code>--model-dir</code> 只影响解码时去哪里找模型；<code>--fetch-models</code> 目前<strong>固定下载到包内默认目录</strong>
+<code>qrsuite/wechat_models/</code>，不认这个参数。两者要用同一个目录，就别改 <code>--model-dir</code>。</p>
+</blockquote>
 <h3 id="44">4.4 输出解读</h3>
 <pre><code>[1/13] ..\cases\h_noise.png
   ✓ [QRCode] HARD-QR-2026
@@ -553,19 +615,29 @@ python -m qrsuite ./pics --json out.json &gt;/dev/null &amp;&amp; jq -r '.[].tex
 <hr />
 <h2 id="6">6. 可选增强引擎</h2>
 <h3 id="61-wechatqrcode">6.1 WeChatQRCode（专治小图/模糊码）</h3>
-<p>它带超分模型，对「小而糊」的二维码效果明显。模型不随仓库分发，需要手动下载：</p>
+<p>它带超分模型，对「小而糊」的二维码效果明显。<strong>是否需要自己下模型，取决于 OpenCV 版本</strong>：</p>
+<ul>
+<li><strong>OpenCV 5.0+</strong>（本仓库 <code>requirements.txt</code> 装的 contrib 包新版本即属此类）：
+  <code>cv2.wechat_qrcode.WeChatQRCode()</code> 可无参构造，<strong>模型已编进 <code>cv2.pyd</code>，不需要任何外部文件</strong>，
+  装好依赖就自动出现 <code>wechat</code> 引擎。</li>
+<li><strong>OpenCV 4.x</strong>：仍需 <code>detect.prototxt / detect.caffemodel / sr.prototxt / sr.caffemodel</code> 四个文件，
+  放到 <code>qrsuite/wechat_models/</code> 才会启用。</li>
+</ul>
+<p>4.x 下可以用脚本抓取：</p>
 <pre><code class="language-bash">python -m qrsuite --fetch-models
 </code></pre>
-<p>脚本会依次尝试 jsdelivr / ghproxy / gitee / raw.githubusercontent 等多个镜像，成功后模型放在 <code>qrsuite/wechat_models/</code>：</p>
 <pre><code>qrsuite/wechat_models/
 ├─ detect.prototxt
 ├─ detect.caffemodel
 ├─ sr.prototxt
 └─ sr.caffemodel
 </code></pre>
-<p>四个文件齐全时，引擎列表里会自动出现 <code>wechat</code>。<strong>下载失败不影响其它引擎</strong>。</p>
 <blockquote>
-<p>若你的网络屏蔽 GitHub（DNS 被改 / 公司网络），<code>--fetch-models</code> 可能全部镜像失败。可以让能从外网下载的朋友把 4 个文件发你，直接放进上面的目录即可。</p>
+<p>已知坑：<code>qrsuite/models.py</code> 里两个 <code>.prototxt</code> 取的是 <code>opencv/opencv</code> 主仓库路径，
+而 wechat_qrcode 模块实际在 <strong>opencv_contrib</strong>；镜像列表里还有一个不存在的域名。
+因此 4.x 上 <code>--fetch-models</code> 可能只有两个 <code>.caffemodel</code> 成功、<code>.prototxt</code> 全部镜像失败。
+遇到这种情况直接从 contrib 仓库手动取四个文件放进上面的目录即可——
+<strong>下载失败不影响其它引擎</strong>，<code>wechat</code> 只是不出现在引擎列表里。</p>
 </blockquote>
 <h3 id="62-v1">6.2 挂载 v1 原程序</h3>
 <pre><code class="language-bash"># 临时指定
@@ -583,7 +655,9 @@ set QRSUITE_ORIGINAL_EXE=E:\ToolDownloads\QRCodeScanner.exe
 <li><strong>剪裁重试</strong>：把二维码区域单独裁出来再识别（页面已内置四角/中心裁剪变体，但人工裁剪更狠）。</li>
 <li><strong>放大或缩小</strong>：太小的图先放大到 ≥300px；太大的截图先缩到 1800px 以内（<code>--max-side 1800</code>）。</li>
 <li><strong>加对比度 / 去反色</strong>：深色底浅色码、屏摄反光、低对比度截图，先做「反色 + 二值化」再试。</li>
-<li><strong>勾选交叉验证</strong>：如果解出来的内容像乱码或每次不一样，说明是<strong>误读</strong>，开启交叉验证可过滤。</li>
+<li><strong>怀疑误读时</strong>：加 <code>-v</code> 看结果卡片上的引擎徽章，或用 <code>--engines zxing</code> / <code>--engines cv2</code> 分别重跑，
+   比对内容是否一致。勾选「交叉验证」<strong>不能过滤掉单引擎的结果</strong>——它只是把「命中即停」推迟到
+   两个引擎给出同一内容，凑不齐时照样返回已解到的字符串，所以别把它当成正确性开关。</li>
 <li><strong>确认码制</strong>：PDF417 / DataMatrix / Aztec 在浏览器版也支持；如果是一维码，注意别裁掉两端的静区（留白）。</li>
 <li><strong>确认不是"半张码"</strong>：二维码被裁掉一半、或关键定位角缺失时，<strong>任何解码器都无能为力</strong>，只能找回原图。</li>
 <li><strong>排障单引擎</strong>：<code>--engines zxing -v</code>、<code>--engines cv2 -v</code> 分别跑，看是哪个引擎能出结果。</li>
@@ -599,10 +673,9 @@ A：换国内源：<code>python -m pip install -r requirements.txt -i https://py
 <p><strong>Q：中文路径/中文文件名读不了？</strong>
 A：Python 版用 Pillow 读图并做了 EXIF 方向处理，中文路径没问题。若你用其它库自行调用，注意 Windows 上 <code>cv2.imread</code> 不支持中文路径（本项目已规避）。</p>
 <p><strong>Q：杀毒软件报警？</strong>
-A：仓库里只有源码，<code>.bat</code> 也只是调用 Python，不带任何可执行文件。Releases 里的 <strong>Windows 单文件版
+A：仓库里只有源码，<code>.bat</code> 也只是调用 Python，不带任何可执行文件。官方 Releases 里的 <strong>Windows 单文件版
 <code>QRSuite.exe</code> 是 PyInstaller 打的</strong>，这类自解压包被杀软误报、被 SmartScreen 拦「已保护你的电脑」都很常见；
-CI 未配置代码签名证书时它必然是未签名的（要自己签：<code>python tools/build_windows.py --sign</code>，凭据走
-<code>QRSUITE_SIGN_PFX</code> / <code>QRSUITE_SIGN_PFX_PASS</code> 等环境变量）。若你保留了 v1 的 <code>QRCodeScanner.exe</code>，那是原作自己的
+未配置代码签名证书时它必然是未签名的（签名流程见 9.5）。若你保留了 v1 的 <code>QRCodeScanner.exe</code>，那是原作自己的
 未签名产物，与本项目无关。介意的话直接用 <code>python -m qrsuite</code> 或网页版。</p>
 <p><strong>Q：图片会被上传吗？</strong>
 A：不会。本地服务只监听 <code>127.0.0.1</code>，浏览器版全部在本机内存解码。唯一的网络请求是你在命令行里<strong>主动</strong>传入图片 URL 时的那次下载。</p>
@@ -621,18 +694,18 @@ A：没有硬上限。页面按 CPU 核数并发解码（最多 4 个 Worker）�
 <li>访问 <code>https://&lt;用户名&gt;.github.io/&lt;仓库名&gt;/</code>。</li>
 </ol>
 <blockquote>
-<p>本仓库<strong>没有</strong> Pages 部署工作流，静态站只能走上面的 branch 直发。<code>.github/workflows/</code> 下的三个文件
-都不涉及 Pages：<code>android.yml</code>（PR/push 跑 <code>:app:assembleDebug</code>，验证能编译并上传 debug APK）、
-<code>release.yml</code>（打 <code>v*</code> tag 时正式签名并挂到 Release）、<code>windows.yml</code>（同一 tag 构建/签名单文件 exe）。
-想用 Actions 发布 Pages 需自建 <code>pages.yml</code>（<code>actions/upload-pages-artifact</code> 指定 <code>path: docs</code>
-+ <code>actions/deploy-pages</code>），再把 Source 切成 <code>GitHub Actions</code>。</p>
+<p>本仓库<strong>没有</strong> Pages 部署工作流，静态站走 branch 直发（就是上面第 2 步）。
+<code>.github/workflows/</code> 下的三个文件都不涉及 Pages：<code>android.yml</code>（PR/push 跑 <code>:app:assembleDebug</code>，
+只验证能编译并上传 debug APK）、<code>release.yml</code>（打 <code>v*</code> tag 时正式签名并attach Release）、
+<code>windows.yml</code>（同一 tag 构建单文件 exe）。想用 Actions 发布 Pages 需自建 <code>pages.yml</code>
+（<code>actions/upload-pages-artifact</code> 指定 <code>path: docs</code> + <code>actions/deploy-pages</code>），再把 Source 切成 <code>GitHub Actions</code>。</p>
 <p><code>docs/</code> 已包含 <code>.nojekyll</code>，且所有前端资源本地化，无 CDN 依赖，离线也能用。</p>
 </blockquote>
 <h3 id="92">9.2 升级前端解码库</h3>
 <pre><code class="language-bash">npm pack jsqr@latest               # 或用 npm registry 直接下载 tgz
 npm pack @zxing/library@latest
 # 解包后替换 docs/vendor/jsQR.js 与 docs/vendor/zxing.min.js
-# 同时更新 docs/vendor/LICENSE.*.txt 与 THIRD_PARTY_NOTICES.md 中的版本号
+# 同时更新 docs/vendor/LICENSE.*.txt 与 Documentation/THIRD_PARTY_NOTICES.md 中的版本号
 node --check docs/decode.js        # 语法自检
 </code></pre>
 <h3 id="93">9.3 回归测试</h3>
@@ -643,14 +716,44 @@ node -e &quot;require('./docs/decode.js')&quot;           # 前端解码模块�
 <h3 id="94">9.4 发版建议</h3>
 <ul>
 <li>语义化版本：破坏性改动 <code>3.0.0</code>，新引擎/新模式 <code>2.1.0</code>，修复 <code>2.0.1</code>。</li>
-<li><strong>三个版本号互不相干，别指望它们一致，也别拿其中一个去推另一个</strong>（括号里是 2.0.4 时的真实值）：</li>
+<li><strong>三个版本号互不相干，别指望它们一致</strong>（2.0.4 时的真实值写在括号里）：</li>
 <li><code>qrsuite/__init__.py</code> 的 <code>__version__</code>（2.0.3）——Python 版自己的版本；</li>
-<li><code>android/app/build.gradle</code> 的 <code>versionName</code> / <code>versionCode</code>（2.0.4 / 2）——Android 独立版本，
+<li><code>android/app/build.gradle</code> 的 <code>versionName</code> / <code>versionCode</code>（2.0.4 / 2）——Android 独立的版本，
     <code>release.yml</code> 用 <code>versionName</code> 拼产物文件名 <code>QRSuite-&lt;versionName&gt;-arm64.apk</code>，<code>versionCode</code> 必须单调递增；</li>
 <li><code>docs/sw.js</code> 的 <code>CACHE</code>（<code>qrsuite-v2.0.7</code>）——<strong>只是 PWA cache-buster，只增不减，不跟版本号绑定</strong>，
-    唯一作用是新资源上线时让旧缓存失效。把它「对齐」成当前版本会缓存不到东西，别改小它。</li>
-<li>发版时还要在 <code>CHANGELOG.md</code> 新增一节，并在 README 顶部补变更摘要。</li>
+    它的唯一作用是让新资源上线时旧缓存失效。</li>
+<li>发版时还要：<code>Documentation/CHANGELOG.md</code> 新增一节；改过 MANUAL / README 的手册链接后重新生成
+  <code>pip install markdown &amp;&amp; python tools/build_manual.py</code>（产出 <code>docs/manual.html</code>）。</li>
 </ul>
+<h3 id="95-android-windows">9.5 发布与签名（Android / Windows）</h3>
+<p>两条链路都由打 tag 触发（<code>v*</code>），也可以用 <code>workflow_dispatch</code> 手动补发同一个 tag。
+产物都由 <code>gh release upload &lt;tag&gt; … --clobber</code> 挂到对应 Release（不存在则 <code>gh release create</code>）。</p>
+<p><strong>Android</strong> —— <code>.github/workflows/release.yml</code></p>
+<ol>
+<li>在仓库 Settings → Secrets and variables → Actions 里配四个 Secrets（keystore 绝不入库）：
+   <code>SIGNING_KEYSTORE_BASE64</code>（<code>base64 -w0 release.jks</code> 的结果）、<code>SIGNING_STORE_PASSWORD</code>、
+   <code>SIGNING_KEY_ALIAS</code>、<code>SIGNING_KEY_PASSWORD</code>。</li>
+<li><code>git tag v2.0.4 &amp;&amp; git push &lt;分发该 Release 的远端&gt; v2.0.4</code>，工作流还原 keystore → <code>:app:assembleRelease</code>。</li>
+<li>工作流用 <code>apksigner verify --print-certs</code> 检查证书，<strong>只要出现 <code>CN=Android Debug</code> 就失败退出</strong>，
+   防止把 debug 包当正式版发出去。</li>
+</ol>
+<p>本机发布走的是同一份 <code>signingConfigs</code>：优先环境变量 <code>QRSUITE_KEYSTORE</code> / <code>QRSUITE_STORE_PASSWORD</code> /
+<code>QRSUITE_KEY_ALIAS</code> / <code>QRSUITE_KEY_PASSWORD</code>，否则找 <code>QRSUITE_SIGNING_PROPERTIES</code> 指向的
+<code>signing.properties</code>，再退到 <code>android/signing.properties</code>；<strong>都没有就静默回退 debug 签名</strong>并打印警告
+（详见 <a href="https://github.com/ibsibxi/qrsuite/blob/main/android/README.md">android/README.md</a>）。</p>
+<p><strong>Windows</strong> —— <code>.github/workflows/windows.yml</code> + <code>tools/build_windows.py</code></p>
+<pre><code class="language-bash">python tools/build_windows.py                      # 只构建，产物 dist/QRSuite.exe
+python tools/build_windows.py --sign               # 构建后用证书签名
+python tools/build_windows.py --sign --no-build    # 只对已有 exe 签名（CI 就这么用）
+</code></pre>
+<p>签名用 Windows SDK 的 <code>signtool.exe</code>（不在 PATH 时用 <code>QRSUITE_SIGNTOOL</code> 指定全路径），凭据只从环境变量读：
+<code>QRSUITE_SIGN_PFX</code> / <code>QRSUITE_SIGN_PFX_PASS</code>，或不给 .pfx 而用证书存储（<code>QRSUITE_SIGN_SHA1</code> 指定指纹，
+不给则 <code>signtool /a</code> 自动挑选）。CI 侧对应两个<strong>可选</strong> Secrets：<code>WINDOWS_CERT_PFX_BASE64</code>、
+<code>WINDOWS_CERT_PASSWORD</code>——不配置也能跑完，只是产物没有签名。</p>
+<blockquote>
+<p>未签名的 exe 会触发 SmartScreen「已保护你的电脑」，用户得手动点「仍要运行」。
+OV 证书需累积声誉才逐步消除，EV 证书立即受信。证书自行向 CA 购买，本项目不附带。</p>
+</blockquote>
 <hr />
 <h2 id="10">10. 附录</h2>
 <h3 id="101">10.1 命令速查</h3>
@@ -682,7 +785,7 @@ python tests/bench.py ./cases old.py         # 基准对比
 </tr>
 <tr>
 <td><strong>交叉验证</strong></td>
-<td>要求 ≥2 个引擎结果一致</td>
+<td>推迟「命中即停」，直到有 ≥2 个引擎给出同一内容（不硬性过滤单引擎结果）</td>
 </tr>
 <tr>
 <td><strong>墙钟 / CPU 时间</strong></td>
@@ -695,63 +798,12 @@ python tests/bench.py ./cases old.py         # 基准对比
 </tbody>
 </table>
 <h3 id="103">10.3 目录结构</h3>
-<pre><code>qrsuite-v2/
-├─ qrsuite/             Python 包（core 引擎策略 / cli 入口 / web 服务 / models 模型）
-├─ docs/                GitHub Pages 站点（index.html、app.js、decode.js、worker、vendor）
-├─ tests/               smoke_test.py（自检）、bench.py（基准）
-├─ run.bat              Windows 菜单式入口
-├─ requirements.txt     依赖
-└─ README.md · MANUAL.md · LICENSE · THIRD_PARTY_NOTICES.md
-</code></pre>
-<h3 id="104-13">10.4 性能参考（13 张混合用例，同一台机器）</h3>
-<table>
-<thead>
-<tr>
-<th>方案</th>
-<th style="text-align: right;">墙钟</th>
-<th style="text-align: right;">CPU</th>
-<th style="text-align: right;">阶段总数</th>
-<th style="text-align: right;">解出</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td>v1 旧流程（跑满 18 变体）</td>
-<td style="text-align: right;">3.40 s</td>
-<td style="text-align: right;">6.78 s</td>
-<td style="text-align: right;">234</td>
-<td style="text-align: right;">12/13</td>
-</tr>
-<tr>
-<td>v2 快速</td>
-<td style="text-align: right;">0.19 s</td>
-<td style="text-align: right;">0.19 s</td>
-<td style="text-align: right;">15</td>
-<td style="text-align: right;">11/13</td>
-</tr>
-<tr>
-<td>v2 均衡（默认）</td>
-<td style="text-align: right;">0.32 s</td>
-<td style="text-align: right;">0.45 s</td>
-<td style="text-align: right;">21</td>
-<td style="text-align: right;">12/13</td>
-</tr>
-<tr>
-<td>v2 深度（含 v1 子进程）</td>
-<td style="text-align: right;">8.69 s</td>
-<td style="text-align: right;">0.95 s</td>
-<td style="text-align: right;">30</td>
-<td style="text-align: right;">12/13</td>
-</tr>
-<tr>
-<td>浏览器版（jsQR+ZXing-js）</td>
-<td style="text-align: right;">平均 44 ms/张（快速）</td>
-<td style="text-align: right;">—</td>
-<td style="text-align: right;">平均 1.2</td>
-<td style="text-align: right;">12/13</td>
-</tr>
-</tbody>
-</table>
+<p>见 <a href="https://github.com/ibsibxi/qrsuite/blob/main/Documentation/ARCHITECTURE.md">ARCHITECTURE.md</a> 第六节——目录树的唯一出处。要点只有一句：
+散文文档一律在 <code>Documentation/</code>，<code>docs/</code> 只放 GitHub Pages 站点（含生成的 <code>manual.html</code>）。</p>
+<h3 id="104">10.4 性能参考</h3>
+<p>见 <a href="https://github.com/ibsibxi/qrsuite/blob/main/Documentation/BENCHMARK.md">BENCHMARK.md</a>——实测数字的唯一出处，本手册不再复制表格以免对不上。</p>
 <hr />
-<p><em>手册随代码一起维护：<code>MANUAL.md</code> 是本文件，<code>docs/manual.html</code> 是同一内容的网页版。</em></p>
+<p><em>手册随代码一起维护：<code>Documentation/MANUAL.md</code> 是本文件，<code>docs/manual.html</code> 是同一内容的网页版，
+由 <code>python tools/build_manual.py</code> 生成（需先 <code>pip install markdown</code>）。改了本文件务必重新生成，
+否则网页版会滞后于本文。</em></p>
 </div></body></html>

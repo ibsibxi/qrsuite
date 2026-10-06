@@ -9,7 +9,7 @@
 
 ```
                     ┌──────────────────────────────────────┐
-                    │  共享的解码策略（级联 + 早退 + 多引擎）  │
+                    │ 同一套级联思路（三端各自实现，不共享代码）│
                     └──────────────────────────────────────┘
                           │              │              │
         ┌─────────────────┘              │              └─────────────────┐
@@ -25,7 +25,10 @@
 ```
 
 三端**不共享代码**（语言与运行环境不同），但共享同一套工程策略：
-**按"代价低 / 命中率高"排序，命中即停**。这是 v2 相对 v1 提速的根本原因。
+**按"代价低 / 命中率高"排序，命中即停**。这是 v2 相对 **Python 原型（文档里统称「v1」）** 提速的根本原因。
+Rust 原作 `QRCodeScanner` 不在这个对比里——它只有 10 个变体 + 4 个角落裁剪、单引擎 bardecoder，
+而且**本来就是命中即停**，只是不读命令行参数、只解 QR。
+（三端的变体清单也各有出入，尤其浏览器端多了逐通道 R/G/B、少了 CLAHE / 自适应阈值，别把两边当同一份。）
 
 ---
 
@@ -33,8 +36,11 @@
 
 ### 2.1 为什么 v1 慢
 
-v1 对每张图**穷举** 18 种预处理变体 × N 个引擎，全部跑完才汇总。
-绝大多数图片在**第一个变体**（原图）就已经能解出来，后面的 17 个变体纯属浪费。
+Python 原型对每张图**穷举** 18 种预处理变体 × 3 个引擎（zxing / cv2 / zbar），全部跑完才汇总——
+13 张用例正好是 13 × 18 = 234 个阶段。绝大多数图片在**第一个变体**（原图）就已经能解出来，
+后面的 17 个变体纯属浪费。具体实测数字集中在 [BENCHMARK.md](BENCHMARK.md)。
+
+> Rust 原作不在这条对比里：它是 10 个变体 + 4 个角落裁剪、单引擎 bardecoder，且已经是「解出就 return」。
 
 ### 2.2 v2 的做法
 
@@ -42,19 +48,27 @@ v1 对每张图**穷举** 18 种预处理变体 × N 个引擎，全部跑完才
 逐级尝试，**一旦有命中立即停止**：
 
 ```
-阶段 0  原图            ← 命中率最高、代价最低，绝大多数图在这一步就结束
-阶段 1  灰度
-阶段 2  放大 2×         ← 仅小图（<700px）才生成，大图跳过
-阶段 3  Otsu 二值化
-阶段 4  CLAHE
-阶段 5  放大 3×         ← 同样仅小图
-阶段 6  反色
-阶段 7  自适应阈值
-...
-阶段 16 中心/四角裁剪    ← 最贵，最后才用
+阶段 0   原图            ← 命中率最高、代价最低，绝大多数图在这一步就结束
+阶段 1   灰度            ← 与原图是同一对数组，只是各引擎取用的入参不同
+阶段 2   放大 2×         ← 仅小图（<700px）才生成，大图整条序列里没有它
+阶段 3   Otsu 二值化
+阶段 4   CLAHE
+阶段 5   放大 3×         ← 同样仅小图
+阶段 6   反色
+阶段 7   自适应阈值
+阶段 8   模糊 + Otsu 二值化
+阶段 9-11 旋转 90 / 180 / 270°
+阶段 12  锐化
+阶段 13  中心裁剪
+阶段 14-17 四角裁剪       ← 最贵，最后才用
 ```
 
-关键点：**变体是惰性生成的**（生成器），大图不会白白生成"放大 3×"这种只会更慢的变体。
+小图（长边 <700px）共 18 个阶段；**大图跳过两个放大变体，只有 16 个**，所以上面的编号对大图整体前移两位。
+
+关键点：变体由生成器 `build_stages()` 产出，**分辨率闸门决定生成哪些**——大图不会白白产出"放大 3×"
+这种只会更慢的变体。但要注意 `decode_arrays()` 进来先做 `stages = list(build_stages(...))`，
+把整条序列**一次性物化**后再按 `max_stages` 截断，所以「命中即停」省的是**引擎调用**，
+并没有省掉后面那些变体的构造开销（想真正省掉，得把截断挪进生成器）。
 
 ### 2.3 三档模式
 
@@ -78,6 +92,11 @@ v1 对每张图**穷举** 18 种预处理变体 × N 个引擎，全部跑完才
 它不放在默认 `balanced` 里——实测会让默认墙钟翻倍，而它多解出的图与
 "抖音/赞赏码"无关（那类私有码它同样不支持），为默认路径付 2× 代价不划算。
 
+码制覆盖并不对齐：`cv2` / `wechat` / `original` **只解 QR**，一维码靠 `zxing` 和 `zbar`
+（DX Film Edge、Telepen 只有 `zxing` 能解；DataBar/RSS 系列 `zxing` 和 `zbar` 都行）。也因此 `--engines wechat` 必须
+配 `--mode deep`——`--engines` 是与**该模式所用的引擎表取交集**，`wechat` 不在 fast/balanced 的表里，
+单独指定会得到空集合，一个引擎都不跑。
+
 ### 2.5 其它优化
 
 - **灰度只算一次**并全程复用；裁剪用数组切片（零拷贝）。v1 每个变体都做 PIL 往返。
@@ -90,10 +109,16 @@ v1 对每张图**穷举** 18 种预处理变体 × N 个引擎，全部跑完才
 
 - `docs/` 就是站点根目录，**零构建、零依赖**，任意静态托管可直接跑。
 - jsQR + ZXing-js **已本地化进仓库**（`docs/vendor/`），不依赖任何 CDN，可完全离线。
+- 浏览器侧码制由内置的 `zxing.min.js`（@zxing/library 0.23.0）决定：QR / Data Matrix / Aztec /
+  PDF417 / 常用一维码都在；Micro QR、RSS-14、RSS-Expanded、MaxiCode 有读取器但**上游自己标注「待验证」**，
+  本仓库没为它们做过样例实测；**DX Film Edge、Telepen 内置包里根本没有**（想要只能走 Python 端）。
+  jsQR 只解 QR。`decode.js` 给 `MultiFormatReader` 只设了 `TRY_HARDER` + `ALSO_INVERTED`，
+  没有设 `POSSIBLE_FORMATS`，所以是「全部已注册读取器都试一遍」。
 - 解码跑在 **Web Worker** 里，界面不阻塞；主线程只负责交互与渲染。
 - `file://` 下无法创建 Worker，自动**回退主线程**解码，并在顶部状态条说明当前环境。
-- 可选**本机增强**：页面探测到本地 `python -m qrsuite --serve` 时，可把图片交给
-  Python 端多引擎处理（网页版拿不到的 OpenCV/zbar 能力）。
+- 可选**本机增强**：由 `python -m qrsuite --serve` 打开页面时（同源），`/health` 探测到后端就出现开关，
+  可把图片交给 Python 端多引擎处理（网页版拿不到的 OpenCV/zbar 能力）。探测走**相对路径**，
+  因此部署到静态托管（如 GitHub Pages）后即使本机服务在跑也连不上，该开关不出现。
 
 > 注意：`file://` 下从 URL 加载的图片会污染 canvas（`getImageData` 抛 SecurityError），
 > 因此自检二维码用 **data URI 内嵌**在 `app.js` 里。
@@ -158,6 +183,8 @@ WebView 方案需要把 `docs/` 打进 assets，且相机/Worker 需要 https �
 ## 五、已知能力边界
 
 **标准二维码/条码**：三端都能解，且对轻微的 logo 遮挡、低对比、模糊、旋转有容错。
+但三端码制集合并不相同（Micro QR：浏览器有读取器但上游标「待验证」/ Python ✅ / Android ❌；
+DX Film Edge 与 Telepen：只有 Python 端的 zxing 能解），细节见 [MANUAL.md 的码制表](MANUAL.md)。
 
 **样式化私有码**（抖音主页码、微信赞赏码/小程序码）：**解不了**，而且不是本项目的缺陷。
 这类码的模块被渲染成**圆点/圆环**，破坏了标准 QR 解码依赖的两个前提：
@@ -167,30 +194,53 @@ WebView 方案需要把 `docs/` 打进 assets，且相机/Worker 需要 https �
 更根本的是，微信赞赏码/小程序码是**同心圆环结构**，数据按环排布，
 还原链接或 `scene` 参数需要**平台服务端的业务密钥**；抖音码同理。
 这已不属于解码器能力问题，而是平台私有加密协议。详见
-[`tools/NOTES-stylized-codes.md`](../tools/NOTES-stylized-codes.md)（含对若干第三方方案的评估结论）。
+[`NOTES-stylized-codes.md`](NOTES-stylized-codes.md)（含对若干第三方方案的评估结论）。
 
 ---
 
 ## 六、目录结构
 
 ```
-01-qrsuite-v2/
+qrsuite-v2/
+├── README.md           门面（尽量短）
+├── LICENSE             MIT
+├── run.bat             Windows 菜单式入口
+├── requirements.txt    Python 依赖
+├── Documentation/      所有说明文档集中在这里
+│   ├── MANUAL.md       使用手册（网页版 docs/manual.html 由它生成）
+│   ├── ARCHITECTURE.md 本文
+│   ├── BENCHMARK.md    实测数字的唯一出处
+│   ├── LINEAGE.md      Rust 原作 / Python 原型 / v2 的关系
+│   ├── ROADMAP.md      计划与明确不做
+│   ├── CHANGELOG.md    版本变更
+│   ├── THIRD_PARTY_NOTICES.md  第三方许可与原作二进制归属
+│   └── NOTES-stylized-codes.md 私有样式化码的调研记录
 ├── qrsuite/            Python 包
-│   ├── core.py         解码核心：引擎、预处理级联、早退、缓存
+│   ├── core.py         解码核心：引擎注册、预处理级联、早退与统计
 │   ├── cli.py          命令行入口
-│   ├── web.py          本地 HTTP 服务（供网页版调用）
+│   ├── web.py          本地 HTTP 服务（结果缓存在这里，不在 core）
 │   ├── winapp.py       Windows 单文件版入口
-│   └── models.py       数据模型
+│   └── models.py       WeChatQRCode 模型下载（多镜像回退）
 ├── docs/               纯前端静态站（GitHub Pages 根目录）
-│   ├── app.js  decode.js  decode.worker.js
+│   ├── index.html      单页 UI（拖拽 / 粘贴 / 历史 / 导出）
+│   ├── app.js  decode.js  decode.worker.js  sw.js  style.css  manifest.webmanifest
+│   ├── i18n.js  lang.css   中英双语文案表与语言切换样式
+│   ├── manual.html     手册网页版（构建产物）
 │   └── vendor/         jsQR / ZXing-js（已本地化）
 ├── android/            Android 原生 App（Gradle 子项目）
 │   └── app/src/main/java/com/qrsuite/scanner/
 │       ├── MainActivity.java      相机 + 识别 + 面板
 │       ├── ScanOverlayView.java   取景遮罩自绘
 │       └── HistoryStore.java      历史记录（SQLite）
+├── assets/             仓库用的介绍图与配图源文件（不属于站点）
 ├── tests/              smoke_test.py（引擎与早退自检）、bench.py（性能对比）
-├── tools/              构建与实验脚本、踩坑与调研记录
+├── tools/              构建与实验脚本（build_manual.py 生成网页版手册、build_windows.py 打包+签名、
+│                       qr_locate.py 定位符查找实验、exp_*.py 各类预处理实验）
 └── .github/workflows/  android.yml（PR/push 编译 debug APK）、release.yml（`v*` tag 正式签名 Android）、
-                        windows.yml（同一 tag 构建/签名单文件 exe）；Pages 走 branch 直发，无工作流
+                        windows.yml（同一 tag 构建/签名单文件 exe）。Pages 仍走 branch 直发，无工作流
 ```
+
+> 散文文档一律在 `Documentation/`，`docs/` 只放站点运行所需文件——这样 Pages 根目录干净，
+> 也不会再把 ARCHITECTURE 之类误发布到线上。网页版手册 `docs/manual.html` 是个例外：
+> 它是 `Documentation/MANUAL.md` 的生成产物，需要待在站点目录里供 Pages 访问，
+> 由 `python tools/build_manual.py` 重建（依赖 `pip install markdown`）。

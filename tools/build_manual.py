@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""把 MANUAL.md 渲染成 docs/manual.html（与站点同风格，可直接被 GitHub Pages 访问）
+"""把 Documentation/MANUAL.md 渲染成 docs/manual.html（与站点同风格，可直接被 GitHub Pages 访问）
 
 用法: python tools/build_manual.py
 依赖: pip install markdown
@@ -7,8 +7,24 @@
 import os, sys, re
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SRC = os.path.join(ROOT, 'MANUAL.md')
+SRC = os.path.join(ROOT, 'Documentation', 'MANUAL.md')
 DST = os.path.join(ROOT, 'docs', 'manual.html')
+
+# 手册里的文档间链接是相对路径（在 GitHub 上直接可点）；生成的 HTML 放在 docs/ 下由 Pages 访问，
+# 相对链接会 404，因此统一改写成仓库页面地址。fork 后请改这一行。
+REPO = 'https://github.com/ibsibxi/qrsuite/blob/main/'
+DOCDIR = 'Documentation/'   # 裸文件名链接相对 MANUAL.md 自己的目录解析
+
+
+def _rewrite_md_links(html: str) -> str:
+    """`ARCHITECTURE.md` → REPO/Documentation/…，`../android/README.md` → REPO/android/…"""
+    def repl(m):
+        rel = m.group(1)
+        target = rel[3:] if rel.startswith('../') else DOCDIR + rel
+        return 'href="%s%s%s"' % (REPO, target, m.group(2) or '')
+
+    return re.sub(r'href="(?!https?:|#)((?:\.\./)?[A-Za-z0-9_.\-/]+\.md)(#[^"]*)?"', repl, html)
+
 
 TPL = """<!DOCTYPE html>
 <html lang="zh-CN">
@@ -56,6 +72,8 @@ def main():
         return 1
     md = open(SRC, encoding='utf-8').read()
     html = markdown.markdown(md, extensions=['tables', 'fenced_code', 'toc', 'sane_lists'])
+    # 文档间的相对 .md 链接在 GitHub 上能点，在 Pages 上会 404（文件不在 docs/ 里）——改写成仓库地址
+    html = _rewrite_md_links(html)
     html = re.sub(r'<h([1-3])>(.*?)</h\1>', lambda m: f'<h{m.group(1)} id="{re.sub(r"[^0-9a-zA-Z\u4e00-\u9fff]+", "-", m.group(2)).strip("-").lower()}">{m.group(2)}</h{m.group(1)}>', html)
     os.makedirs(os.path.dirname(DST), exist_ok=True)
     open(DST, 'w', encoding='utf-8').write(TPL.format(body=html))

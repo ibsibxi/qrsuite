@@ -1,22 +1,19 @@
 # QRSuite v2 · 多引擎二维码 / 条码识别
 
-> 一个把「命令行工具 + 本地网页 + 多引擎解码」合并到一套代码里的二维码识别项目。
-> **前半部分是纯前端静态站点，可直接部署到 GitHub Pages；后半部分是本地 Python 高精度引擎。**
+图片进来，内容出去。同一个仓库里有三种用法：**命令行批量识别**、**纯前端网页（可直接部署 GitHub Pages）**、
+**Android 原生 App**；再加一个可选的**本地 Python 高精度引擎**做兜底。三端各自实现，**不共享代码**。
 
-**这是 [ZapcoMan/QRCodeScanner](https://github.com/ZapcoMan/QRCodeScanner) 的非官方重写版（二创）**，
-由 [ZboY](https://github.com/ibsibxi) 维护。原作是 Rust 单文件 CLI（bardecoder 单引擎、仅交互式输入）；
-本项目重写为「Python 多引擎 + 纯前端静态站 + Android 原生 App」三形态共存。
-原作的源码与二进制版权归**原作者**所有，**不随本仓库分发**（详见 [LICENSE](LICENSE) 与
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)）。
+本项目是 [ZapcoMan/QRCodeScanner](https://github.com/ZapcoMan/QRCodeScanner)（Rust 单文件 CLI）的
+非官方重写版，由 [ZboY](https://github.com/ibsibxi) 维护。来龙去脉与「两个 v1」的区别见
+[Documentation/LINEAGE.md](Documentation/LINEAGE.md)。
 
-[![Pages](https://img.shields.io/badge/GitHub%20Pages-ready-success)](#-部署到-github-pages)
+[![Pages](https://img.shields.io/badge/GitHub%20Pages-ready-success)](Documentation/MANUAL.md#9-部署与维护给维护者)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue)]()
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Android](https://img.shields.io/badge/Android-arm64-brightgreen)](android/)
 
-**🟢 在线试用（无需安装）：<https://ibsibxi.github.io/qrsuite/>**
-纯前端版本，图片不出浏览器；**界面支持中英切换**（右上角按钮，自动跟随浏览器语言）。
-也可把 `docs/` 部署到你自己的静态托管。
+**🟢 在线试用（无需安装）：<https://ibsibxi.github.io/qrsuite/>** —— 纯前端版，图片不出浏览器，
+**界面支持中英切换**（右上角按钮，自动跟随浏览器语言）；也可把 `docs/` 部署到你自己的静态托管。
 
 ## ⬇️ 下载
 
@@ -28,179 +25,83 @@
 | **Windows** | [QRSuite.exe](https://github.com/ibsibxi/qrsuite/releases/download/v2.0.4/QRSuite.exe) | 80 MB，单文件版，双击启动本地服务并自动开浏览器 |
 
 > Android 装上后若曾装过 debug 签名版，需先卸载（签名不同无法覆盖安装）。
-> Windows 目前**无数字签名**，SmartScreen 会提示"已保护你的电脑"，点"仍要运行"即可；
-> 消除该提示需购买代码签名证书（见下方「Windows 代码签名」）。
+> Windows 目前**无数字签名**，SmartScreen 会提示"已保护你的电脑"，点"仍要运行"即可。
 > 仓库**有意不提交** `.apk` / `.exe`（二进制会污染版本历史），一律走 Releases 分发，源码仍可自行构建。
-
-### Android 发布由 CI 自动完成
-
-打 `v*` tag 即触发 `Android Release` 流程：构建**正式签名** APK → 自动校验"不是 debug 证书" → 上传到对应 Release。
-签名材料存放于仓库 Secrets（`SIGNING_KEYSTORE_BASE64` 等），**密钥不进代码库**。
-
-### Windows 代码签名（需自备证书）
-
-`tools/build_windows.py` 支持构建后签名（走 Windows SDK 的 `signtool`）：
-
-```powershell
-# 1) 购买代码签名证书（OV 可逐步建立声誉，EV 立即受信），导入证书存储或保留 .pfx
-# 2) 设置环境变量（不要写进任何仓库文件）
-$env:QRSUITE_SIGN_PFX      = 'C:\path\to\codesign.pfx'
-$env:QRSUITE_SIGN_PFX_PASS = '<口令>'
-# 3) 构建并签名
-python tools/build_windows.py --sign
-```
-
-CI 侧（`.github/workflows/windows.yml`）也支持：配置 `WINDOWS_CERT_PFX_BASE64` 与
-`WINDOWS_CERT_PASSWORD` 两个 Secret 后，打 tag 会自动构建并签名 Windows 产物；
-**未配置时照常构建，只是产物无签名**。
+>
+> 签名与发布的完整流程（Android 打 tag 自动签名、Windows `signtool`、需要哪些 Secrets）见
+> [MANUAL §9.5 发布与签名](Documentation/MANUAL.md#95-发布与签名android--windows)。
 
 ---
 
-## ✨ 特性
+## 能做什么
 
-> 📚 文档：[使用手册 MANUAL.md](MANUAL.md) · [网页版手册](docs/manual.html) · [变更记录 CHANGELOG.md](CHANGELOG.md)
-
-| | |
-|---|---|
-| **多引擎并联** | zxing-cpp · OpenCV QRCodeDetector · zbar · WeChatQRCode(可选) · 原版 bardecoder |
-| **多码制** | QR / MicroQR / DataMatrix / Aztec / PDF417 / Code128·39·93 / EAN·UPC / ITF / Codabar |
-| **级联 + 早退** | 变体按「命中率高 / 代价低」排序，**命中即停**，不再无脑跑满全部变体 |
-| **18 种预处理** | 灰度 · CLAHE · Otsu · 自适应阈值 · 模糊+二值化 · 锐化 · 反色 · 放大 2×/3× · 旋转 90/180/270° · 中心/四角裁剪 |
-| **两种形态一套代码** | `qrsuite`（Python CLI + 本地服务）与 `docs/`（纯前端静态页）共享同一套解码策略 |
-| **网页零依赖** | jsQR + ZXing-js 全部本地化进仓库，**不依赖任何 CDN**，可离线使用 |
-| **浏览器内解码** | 图片不上传服务器；Worker 后台线程解码，界面不卡顿 |
-| **可选本机增强** | 静态页检测到本地 Python 服务时，自动启用 OpenCV / zbar / bardecoder 等额外引擎 |
-| **隐私** | 无埋点、无网络请求（除你主动输入的图片 URL） |
+- **一维码和二维码都能读**：QR / MicroQR / DataMatrix / Aztec / PDF417 / Code128·39·93 / EAN·UPC / ITF / Codabar。
+  三端覆盖范围不同，逐格式对照见 [MANUAL 的码制表](Documentation/MANUAL.md#1-这是什么能识别什么)。
+- **多引擎并联**：zxing-cpp · OpenCV QRCodeDetector · zbar · WeChatQRCode（可选）· 原作 exe（可选），
+  结果按内容去重。
+- **级联 + 早退**：16～18 个预处理变体按「命中率高 / 代价低」排序，命中即停，不跑满。
+  为什么快见 [ARCHITECTURE](Documentation/ARCHITECTURE.md)，实测数字见 [BENCHMARK](Documentation/BENCHMARK.md)。
+- **网页零依赖、可离线、中英双语**：jsQR + ZXing-js 全部本地化进仓库，不依赖 CDN；界面文案在
+  `docs/i18n.js` 里中英对齐，右上角切换并自动跟随浏览器语言（Android 同步有英文资源）。
+- **隐私优先**：网页与 App 都在本机/设备内解码，不上传、无埋点；App 连 `INTERNET` 权限都显式移除。
+  唯一的网络请求是你主动把图片 URL 交给命令行时的那次下载。
 
 ---
 
-## 📊 实测基准（v1 vs v2，13 张图 / 6 种码制 + 7 种困难场景，同一台机器）
+## 快速开始
 
-| 方案 | 墙钟 | CPU 时间 | 阶段总数 | 引擎调用 | 解出 |
-|---|---:|---:|---:|---:|---:|
-| v1 旧流程（18 变体全跑完，无早退） | 3.40 s | 6.78 s | 234 | — | 12/13 |
-| **v2 `--mode fast`** | **0.3～0.5 s** | 0.6～1.1 s | **15** | 30 | 11/13 |
-| **v2 `--mode balanced`（默认）** | **0.4～0.6 s** | 0.6～1.8 s | **21** | 63 | 12/13 |
-| v2 `--mode deep`（含微信模型与 v1 程序） | 0.7～0.9 s | 1.2 s | 32 | 98 | 12/13 |
-
-- **解出数量与 v1 持平（12/13）**，阶段总数从 234 降到 21（**约 11× 更少**）。
-- **墙钟/CPU 为 3 次运行的区间**：本机测量噪声较大（同配置单次可差 ±0.2 s），
-  因此给出区间而非单点值；早期版本曾记录 0.32 s 的单点值，那是加入 WeChat 引擎
-  （固定初始化约 0.2 s）之前的数字，现默认模式已不再加载它。
-- v1 的 CPU 时间 > 墙钟时间（6.78 > 3.40），说明多核跑满；v2 fast 更接近单核轻载。
-- 浏览器端（jsQR + ZXing-js，Worker 内）：13 张平均 **44 ms/张**（fast）、平均只用 **1.2 个阶段**。
-
-复现：`python tests/bench.py <图片目录>`（进程内计时，与原 v1 数字同口径）。
-若同时给出 v1 脚本路径，会打印两者对比；脚本路径可在 `tests/bench.py` 顶部调整。
-
-架构与设计取舍见 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**。
-
----
-
-## 🚀 快速开始
-
-### 方式一：网页版（推荐日常使用，也是 GitHub Pages 上的那一版）
+**网页版**（日常推荐，也是 Pages 上的那一版）
 
 ```bash
 pip install -r requirements.txt
-python -m qrsuite --serve           # 自动打开浏览器 http://127.0.0.1:8765
+python -m qrsuite --serve           # 自动打开 http://127.0.0.1:8765，Windows 可双击 run.bat 选 1
 ```
 
-Windows 直接双击 `run.bat`（菜单选 1）。
-
-### 方式二：命令行
+**命令行**
 
 ```bash
 python -m qrsuite qr.png                        # 单张
-python -m qrsuite ./pics --mode fast            # 目录递归 + 快速模式
+python -m qrsuite ./pics --mode fast            # 目录自动递归
 python -m qrsuite "https://example.com/q.png"   # 图片 URL
-python -m qrsuite ./pics --json out.json -v     # 输出 JSON 并打印每张的阶段/CPU 明细
-python -m qrsuite qr.png --verify               # 交叉验证：需 ≥2 引擎一致才算成功
-python -m qrsuite --fetch-models                # 下载 WeChatQRCode 模型（可选引擎）
+python -m qrsuite ./pics --json out.json -v     # 导出 JSON + 每张的阶段/CPU 明细
 ```
 
-### 方式三：纯前端（无需 Python）
+**纯前端**（不装 Python）：直接双击 `docs/index.html`，拖拽或 `Ctrl+V` 粘贴即可。
 
-直接双击 `docs/index.html` 即可用（拖拽 / 粘贴图片），或把 `docs/` 部署到任意静态托管。
+**Android**：`android/` 是 Gradle 子项目，构建与真机调试见 [android/README.md](android/README.md)。
 
----
-
-## 🌐 部署到 GitHub Pages
-
-`docs/` 就是站点根目录，**零构建、零依赖**（已含 `.nojekyll`）。
-
-1. Fork / 克隆本项目，推送到你的 GitHub 仓库（分支 `main`）。
-2. 仓库 **Settings → Pages → Build and deployment → Source** 选 `Deploy from a branch`，分支选 `main`、目录选 **`/docs`** → Save。
-3. 等 1 分钟，访问 `https://<你的用户名>.github.io/<仓库名>/`。
-
-仓库**没有** Pages 部署工作流，静态站走上面第 2 步的 branch 直发即可。
-`.github/workflows/` 下的 `android.yml` / `release.yml` / `windows.yml` 都只构建 Android 与 Windows 产物，
-不涉及 Pages。若想改用 Actions 发布，需自建 `pages.yml`：
-
-- `actions/upload-pages-artifact`（`path: docs`）+ `actions/deploy-pages`。
-- 然后在 Settings → Pages → Source 里选 **`GitHub Actions`**。
-
-> 提示：Pages 是纯静态托管，**没有后端**，因此线上的网页使用浏览器端解码（jsQR + ZXing-js）。
-> 需要 OpenCV / WeChatQRCode 这类更强引擎时，在本机跑 `python -m qrsuite --serve`，页面会自动出现「本机增强引擎」开关。
+**Windows 单文件版**：`python tools/build_windows.py`（加 `--sign` 走 `signtool` 签名，需自备证书）。
 
 ---
 
-## 🧱 目录结构
+## 文档地图
+
+| 想知道 | 去看 |
+|---|---|
+| 每个参数、每种打开方式、识别不出来怎么办 | [Documentation/MANUAL.md](Documentation/MANUAL.md)（[网页版](docs/manual.html)） |
+| 级联/早退/引擎取舍、三端各自怎么实现 | [Documentation/ARCHITECTURE.md](Documentation/ARCHITECTURE.md) |
+| 基准数字、怎么复现、哪些数字不能互相比较 | [Documentation/BENCHMARK.md](Documentation/BENCHMARK.md) |
+| 与 Rust 原作 / Python 原型的关系 | [Documentation/LINEAGE.md](Documentation/LINEAGE.md) |
+| 接下来做什么 | [Documentation/ROADMAP.md](Documentation/ROADMAP.md) |
+| 版本变更 | [Documentation/CHANGELOG.md](Documentation/CHANGELOG.md) |
+| 第三方组件许可、原作二进制归属 | [Documentation/THIRD_PARTY_NOTICES.md](Documentation/THIRD_PARTY_NOTICES.md) |
+| 私有样式化码（抖音/赞赏码）为什么解不了 | [Documentation/NOTES-stylized-codes.md](Documentation/NOTES-stylized-codes.md) |
+
+## 仓库结构
 
 ```
-qrsuite-v2/
-├─ qrsuite/                 # Python 包（本地高精度版）
-│  ├─ core.py               #   引擎注册 + 级联/早退策略 + 统计
-│  ├─ cli.py                #   统一命令行入口（scan / serve / fetch-models）
-│  ├─ web.py                #   本地 HTTP 服务（含结果缓存）
-│  └─ models.py             #   WeChatQRCode 模型下载（多镜像回退）
-├─ docs/                    # ← GitHub Pages 站点根目录
-│  ├─ index.html            #   单页 UI（拖拽 / 粘贴 / 历史 / 导出）
-│  ├─ app.js                #   Worker 池、结果渲染、历史、可选后端
-│  ├─ decode.worker.js      #   Web Worker：后台线程解码
-│  ├─ decode.js             #   级联解码核心（worker 与 Node 双端可用）
-│  ├─ style.css
-│  └─ vendor/               #   jsQR.js + zxing.min.js（本地化，含各自 LICENSE）
-├─ tests/
-│  ├─ bench.py              # v1 vs v2 基准对比
-│  └─ smoke_test.py         # 冒烟测试（引擎可用性 + 端到端解码）
-├─ .github/workflows/       # android.yml（debug 构建）· release.yml（签名发布）· windows.yml（exe）
-├─ requirements.txt
-├─ run.bat                  # Windows 一键入口（网页版 / 命令行 / 模型下载）
-└─ LICENSE · THIRD_PARTY_NOTICES.md
+README.md · LICENSE
+Documentation/     所有说明文档（MANUAL 是源头，docs/manual.html 由它生成）
+qrsuite/           Python 包：core 引擎与级联 / cli 入口 / web 本地服务 / models 模型下载
+docs/              GitHub Pages 站点根目录（index.html + app.js + i18n.js + decode.js + vendor + sw.js）
+android/           原生 App（CameraX + ML Kit，中/英界面）
+tests/ tools/      基准与冒烟测试、构建脚本（build_manual / build_windows）与实验脚本
+.github/workflows/ Android CI + Release 自动签名 + Windows 构建
 ```
 
----
+`docs/` 是 Pages 根目录，所以站点文件和散文文档分开放：散文一律在 `Documentation/`。
 
-## 🔍 解析策略（为什么更快）
+## License
 
-1. **级联排序**：`原图 → Otsu 二值化 → 放大2× → 反色 → 旋转 → 裁剪 → 锐化 → 自适应阈值`，
-   顺序按「命中率 / 计算代价」排，常见图在**第 1 阶段**就出结果。
-2. **早退**：任一引擎解出即停止（`--verify` 时要求 ≥2 引擎一致）。
-3. **分辨率闸门**：大图先缩到 1800px 再解码；只有小图（<700px）才做放大——避免最贵的无效变体。
-4. **少拷贝**：灰度只算一次并复用，切片裁剪零拷贝，全程 NumPy/OpenCV 数组（v1 每个变体都做 PIL 往返）。
-5. **缓存**：本地服务按「图片哈希 + 模式」缓存结果，同一张图重复打开即时返回。
-6. **后台线程**：网页端解码全部在 Worker 里跑，主线程只做 UI；并发数按 CPU 核数自适应。
-
----
-
-## 🤝 与原始项目的关系
-
-本项目是 **v2 分支**，最初用于替代/增强原作者（朋友）那版 `QRCodeScanner.exe`：
-v1 是 Rust 单文件 CLI，只有 bardecoder 单引擎、且**不读命令行参数**（`stdin` 交互输入）。
-v2 保留了对 v1 的兼容（可作为 `original` 引擎一并调用），并重写了输入层、引擎层与交互层。
-
-> 原版二进制与源码版权归原作者所有；请在合并进对方仓库前与其确认 License 与署名方式。
-
-## 📄 License
-
-本项目（v2 代码）采用 **MIT**，见 [LICENSE](LICENSE)。
-第三方组件许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)（zxing-cpp、OpenCV、pyzbar/ZBar、jsQR、ZXing-js 等）。
-
-## 🗺️ Roadmap
-
-- [ ] 摄像头实时扫码（`getUserMedia` + 逐帧解码）
-- [ ] WASM 引擎（ZXing-C++ WASM）替换 JS 版，进一步提升识别率
-- [ ] PWA 离线安装（Service Worker 缓存 `docs/`）
-- [ ] 批量导出 CSV / 二维码内容去重统计
-- [ ] 条形码类型过滤与置信度评分
+本项目（v2 代码）MIT，见 [LICENSE](LICENSE)；第三方组件与原作二进制归属见
+[Documentation/THIRD_PARTY_NOTICES.md](Documentation/THIRD_PARTY_NOTICES.md)。
