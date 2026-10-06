@@ -1,13 +1,13 @@
-/*! QRSuite v2 · Service Worker —�?让网页可安装到手机桌面并离线使用
- *  策略：静态资�?cache-first，导航请�?network-first 回退缓存�?
- *  注意：Service Worker 只在 http(s) 下生效（file:// 不可用）�?
+/*! QRSuite v2 · Service Worker —— 让网页可安装到手机桌面并离线使用
+ *  策略：静态资源 cache-first，导航请求 network-first 回退缓存。
+ *  注意：Service Worker 只在 http(s) 下生效（file:// 不可用）。
  */
-const CACHE = 'qrsuite-v2.2.5';
+const CACHE = 'qrsuite-v2.2.6';
 const ASSETS = [
   './', './index.html', './style.css', './lang.css', './app.js', './i18n.js', './decode.js', './decode.worker.js',
   './gen.js', './stylized.js',
   './vendor/jsQR.js', './vendor/zxing.min.js',
-  // 生成库（MIT）本地打包，不引�?CDN
+  // 生成库（MIT）本地打包，不引用 CDN
   './vendor/qrcode-generator.js', './vendor/qrcode-generator-utf8.js',
   './manifest.webmanifest', './icon-192.png', './icon-512.png', './manual.html', './selftest-qr.png'
 ];
@@ -30,7 +30,7 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const req = e.request;
-  if (req.method !== 'GET') return;                       // /api/decode �?POST 直接走网�?
+  if (req.method !== 'GET') return;                       // /api/decode 等 POST 直接走网络
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;             // 跨域一律不拦截
 
