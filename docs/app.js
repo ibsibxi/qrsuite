@@ -351,16 +351,36 @@ function binaryRuns(s, limit) {
   return out;
 }
 
-/** 计算 payload 的字节数与可打印占比（用于展示"这是二进制"的证据）。 */
+/** 计算 payload 的字节数与可打印占比。
+ *
+ *  口径很重要：二进制被解码器**逐字节直译**成字符时（Latin-1 映射 / zxing-cpp 的
+ *  "<SOH>" 转义形态），**1 个字符就对应 1 个原始字节**。
+ *  我第一版按「CJK 算 3 字节」估 UTF-8 长度，结果把 318 字符报成 543 字节 ——
+ *  数字虚高，用户会以为复制丢了数据。现改为按字符数计（越界字符才另算）。
+ */
 function binaryStats(s) {
-  let n = 0, printable = 0;
+  let bytes = 0, printable = 0;
   for (let i = 0; i < s.length; i++) {
     const o = s.charCodeAt(i);
-    if (o >= 0xDC80 && o <= 0xDCFF) { n++; continue; }
-    if (o <= 0xFF) { n++; if (o >= 32 && o < 127) printable++; }
-    else { n += 3; }                       // CJK 等按 UTF-8 3 字节粗估
+    if (o >= 0xDC80 && o <= 0xDCFF) { bytes++; continue; }   // 代理转义 = 1 字节
+    if (o <= 0xFF) { bytes++; if (o >= 32 && o < 127) printable++; continue; }
+    bytes++;                                                  // 其余（含 CJK）按 1 字符计
   }
-  return { bytes: n, printableRatio: n ? printable / n : 0 };
+  return { bytes: bytes, chars: s.length, printableRatio: bytes ? printable / bytes : 0 };
+}
+
+/** 把 payload 还原成原始字节并编码为 Base64。
+ *  为什么不直接复制原文：原文含大量控制字符，粘进记事本/表格容易变形或显示不全；
+ *  Base64 是纯 ASCII、长度确定、可无损还原，适合"把源码带走"这个用途。 */
+function payloadBase64(s) {
+  let bytes = '';
+  for (let i = 0; i < s.length; i++) {
+    const o = s.charCodeAt(i);
+    if (o >= 0xDC80 && o <= 0xDCFF) bytes += String.fromCharCode(o - 0xDC00);
+    else if (o <= 0xFF) bytes += String.fromCharCode(o);
+    else bytes += '?';
+  }
+  try { return btoa(bytes); } catch (e) { return ''; }
 }
 
 /* ============================ 5. 渲染 ============================ */
@@ -427,7 +447,7 @@ function render(card, res, total, file) {
       `${h.variants.slice(0, 4).map(v => `<span class="badge">${v}</span>`).join('')}` +
       (isBin ? `<span class="badge cat"></span>` : '') + `</div>
       <div class="val"></div><div class="row"><button class="b-copy"></button>` +
-      (isBin ? `<button class="b-raw"></button>` : `<button class="b-open"></button>`) + `</div>`;
+      (isBin ? `<button class="b-raw"></button><button class="b-b64"></button>` : `<button class="b-open"></button>`) + `</div>`;
     d.querySelector('.badge.f').textContent = h.format;
     if (isBin) {
       const st = binaryStats(h.text);
@@ -435,26 +455,34 @@ function render(card, res, total, file) {
       d.querySelector('.badge.cat').textContent = T('binary.tag');
       let note = T('binary.note', { n: st.bytes, p: Math.round(st.printableRatio * 100) });
       if (runs.length) note += '\n' + T('binary.runs') + ' ' + runs.join(' | ');
-      note += '\n' + T('binary.copyHint');
+      note += '\n' + T('binary.copyHint', { n: st.chars });
       d.querySelector('.val').textContent = note;
     } else {
       d.querySelector('.val').textContent = h.text;
     }
-    const [b1, b2] = d.querySelectorAll('button');
+    const btns = d.querySelectorAll('button');
+    const b1 = btns[0];
     b1.textContent = T('btn.copy');
     if (isBin) {
-      // 「复制解析源码」：复制**完整原始字节**（不是上面显示的可读片段）。
-      // 片段只是给人看的摘要，真正有用的原始数据必须能整段拿走。
-      b2.textContent = T('btn.copyRaw');
-      b2.classList.add('b-raw');
-      b2.onclick = () => {
+      // 「复制解析源码」：复制完整原始数据（长度与上面标注的字符数一致）。
+      const bRaw = btns[1], bB64 = btns[2];
+      bRaw.textContent = T('btn.copyRaw');
+      bRaw.onclick = () => {
         copyText(h.text);
-        b2.textContent = T('btn.copied');
-        setTimeout(() => b2.textContent = T('btn.copyRaw'), 1400);
+        bRaw.textContent = T('btn.copied');
+        setTimeout(() => bRaw.textContent = T('btn.copyRaw'), 1400);
+      };
+      // 「复制 Base64」：纯 ASCII、无损、贴到任何地方都不变形，适合带走源码
+      bB64.textContent = T('btn.copyB64');
+      bB64.onclick = () => {
+        const b64s = payloadBase64(h.text);
+        if (b64s) copyText(b64s);
+        bB64.textContent = b64s ? T('btn.copied') : T('btn.b64Fail');
+        setTimeout(() => bB64.textContent = T('btn.copyB64'), 1600);
       };
     } else {
-      b2.textContent = T('btn.open');
-      b2.onclick = () => window.open(h.text, '_blank');
+      btns[1].textContent = T('btn.open');
+      btns[1].onclick = () => window.open(h.text, '_blank');
     }
     b1.onclick = () => {
       copyText(h.text);
