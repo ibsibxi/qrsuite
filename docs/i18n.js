@@ -96,6 +96,7 @@
   'binary.tag': '二进制数据',
   'binary.note': '解出了 {n} 字节的二进制数据（可打印占比 {p}%）—— 这不是文本，无法按文字显示。常见于乘车码、电子票据这类加密令牌。',
   'binary.runs': '其中的可读片段:',
+  'binary.nameOnly': '（仅二进制，无可读字段）',
   // 标签页
   'tab.decode': '🔍 解析二维码',
   'tab.generate': '✏️ 生成二维码',
@@ -216,6 +217,7 @@
   'binary.tag': 'Binary data',
   'binary.note': 'Decoded {n} bytes of binary data ({p}% printable) — this is not text and cannot be shown as characters. Typical of transit codes and encrypted tickets.',
   'binary.runs': 'Readable fragments:',
+  'binary.nameOnly': '(binary only, no readable field)',
   // Tabs
   'tab.decode': '🔍 Decode',
   'tab.generate': '✏️ Generate',

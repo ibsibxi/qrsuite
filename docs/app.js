@@ -462,10 +462,23 @@ function renderHistory() {
   const hint = $('#hhint');
   if (hint) hint.textContent = T('hist.hint', { n: h.length });
   const old = $('#hcount'); if (old) old.textContent = h.length;   // 兼容旧标记
-  $('#hlist').innerHTML = h.slice(0, 30).map(r =>
-    `<div class="hrow"><span class="badge f">${r.format}</span><span class="hname">${esc(r.name)}</span>
-     <span class="hval" title="${esc(T('hist.copyTitle'))}">${esc(r.text)}</span>
-     <button data-copy="${encodeURIComponent(r.text)}">${esc(T('btn.copy'))}</button></div>`).join('');
+  $('#hlist').innerHTML = h.slice(0, 30).map(r => {
+    // 二进制历史不能直接显示原文（会是一行乱码）：改为标注 + 可读片段。
+    // r.binary 是新记录带的标记；旧记录则实时判定一次。
+    const isBin = (r.binary !== undefined) ? !!r.binary : isBinaryText(r.text);
+    let shown;
+    if (isBin) {
+      const runs = binaryRuns(r.text, 2);
+      shown = runs.length ? runs.join(' | ') : T('binary.nameOnly');
+    } else {
+      shown = r.text;
+    }
+    return `<div class="hrow"><span class="badge f">${r.format}</span>` +
+      (isBin ? `<span class="badge cat">${esc(T('binary.tag'))}</span>` : '') +
+      `<span class="hname">${esc(r.name)}</span>
+      <span class="hval" title="${esc(T('hist.copyTitle'))}">${esc(shown)}</span>
+      <button data-copy="${encodeURIComponent(r.text)}">${esc(T('btn.copy'))}</button></div>`;
+  }).join('');
   $('#hlist').querySelectorAll('button[data-copy]').forEach(b => b.onclick = () => {
     navigator.clipboard.writeText(decodeURIComponent(b.dataset.copy)).catch(() => { }); b.textContent = '✓';
   });
