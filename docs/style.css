@@ -98,18 +98,28 @@ main a{color:var(--acc)}
 /* ============ 生成板块 ============ */
 .gen{margin-top:18px}
 .gen h2{font-size:17px;margin:0 0 6px}
-.gen textarea{width:100%;box-sizing:border-box;background:#0f1626;color:var(--fg);
-  border:1px solid #26324a;border-radius:8px;padding:10px;font-size:14px;font-family:inherit;resize:vertical}
+/* 输入区独占整行：此前被 .gen-row 的 flex 挤压导致中文竖排 */
+.gen textarea{display:block;width:100%;box-sizing:border-box;background:#0f1626;color:var(--fg);
+  border:1px solid #26324a;border-radius:8px;padding:10px;font-size:14px;font-family:inherit;
+  resize:vertical;min-height:64px}
 .gen textarea:focus{outline:none;border-color:var(--acc)}
-.gen-row{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px;font-size:13px}
-.gen-row label{display:flex;align-items:center;gap:6px;color:var(--mut)}
+.gen-row{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:center;margin-top:10px;font-size:13px}
+/* 关键：标签不许被压缩，否则中文会一个字一行 */
+.gen-row label{display:flex;align-items:center;gap:6px;color:var(--mut);
+  flex:0 0 auto;white-space:nowrap}
 .gen-row select,.gen-row input[type=number]{background:#0f1626;color:var(--fg);
-  border:1px solid #26324a;border-radius:6px;padding:5px 7px;font-size:13px}
-.gen-row input[type=color]{width:34px;height:26px;padding:0;border:1px solid #26324a;border-radius:6px;background:none}
-.gen-actions{display:flex;align-items:center;gap:10px;margin-top:12px}
+  border:1px solid #26324a;border-radius:6px;padding:5px 7px;font-size:13px;max-width:150px}
+.gen-row input[type=number]{max-width:72px}
+.gen-row input[type=color]{width:34px;height:26px;padding:0;border:1px solid #26324a;border-radius:6px;background:none;flex:0 0 auto}
+.gen-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:12px}
 .gen-actions .hint{color:var(--mut);font-size:12.5px}
 .gen-preview{margin-top:12px;display:flex;justify-content:center}
-.gen-preview canvas{max-width:100%;height:auto;image-rendering:pixelated;
+.gen-preview canvas{max-width:min(100%, 360px);height:auto;image-rendering:pixelated;
   border-radius:8px;background:#fff;padding:6px}
+.gen .hint{line-height:1.6}
 /* 异形码说明块 */
 .stylized-lead{font-size:13px;color:var(--mut);line-height:1.6;margin:0 0 10px}
+@media (max-width:620px){
+  .gen-row label{font-size:12.5px}
+  .gen-row select{max-width:120px}
+}

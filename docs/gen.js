@@ -141,8 +141,11 @@
       <p class="hint" id="genWarn" data-i18n="gen.scanWarn">提示：圆角样式与方块一样可扫；圆点样式已调成覆盖四角（内切圆会扫不出，实测过）。中心加 Logo 会遮挡模块，请用 H 级纠错并先试扫。</p>
       <div class="gen-preview"><canvas id="genCanvas"></canvas></div>
     `;
+    // 放在结果列表**之后**：此前插在列表前面，会把"异形码分类"等判定结果挤到
+    // 折叠线以下，用户扫完看不到反馈、以为没反应（实测截图确认过）。
     const list = $('#list');
-    (list && list.parentNode ? list.parentNode : document.body).insertBefore(panel, list || null);
+    if (list && list.parentNode) list.parentNode.insertBefore(panel, list.nextSibling);
+    else document.body.appendChild(panel);
     return panel;
   }
 
