@@ -36,7 +36,6 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.appcompat.app.AppCompatDelegate;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ExperimentalGetImage;
@@ -46,7 +45,6 @@ import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
-import androidx.core.os.LocaleListCompat;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
@@ -84,6 +82,19 @@ public class MainActivity extends AppCompatActivity {
     private ScanOverlayView overlay;
     private LinearLayout permPanel;
     private MaterialButton btnTorch, btnHistory, btnPick, btnGrant, btnPickFromPerm, btnLang;
+
+    // ---- 相机帧里的异形码判定限流参数 ----
+    /** 每隔多少帧抽一次灰度小图做异形码判定（判定要几十毫秒，不必逐帧）。 */
+    private static final int STYLIZED_FRAME_INTERVAL = 5;
+    /** Y 平面抽稀步长（720p -> 约 427×240）。 */
+    private static final int STYLIZED_LUMA_STEP = 3;
+    /** 弹出结果后的冷却，避免连续弹窗。 */
+    private static final long STYLIZED_COOLDOWN_MS = 2500L;
+
+    private int frameCounter = 0;
+    private final java.util.concurrent.atomic.AtomicBoolean stylizedBusy =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private volatile long stylizedCooldownUntil = 0L;
     private TextView hint;
 
     private ProcessCameraProvider cameraProvider;
@@ -309,10 +320,31 @@ public class MainActivity extends AppCompatActivity {
                 busy.set(false);
                 return;
             }
+
+            // 异形码（太阳码/抖音码）判定走**另一条通道**：ML Kit 永远认不出这类码，
+            // 所以不能挂在"识别成功"回调里。这里在送 ML Kit 之前先把灰度小图抽出来，
+            // 省得在回调里再解一次 YUV；判定本身限流（见 maybeDetectStylized）。
+            // 每 STYLIZED_FRAME_INTERVAL 帧才抽一次：判定只用于"对准后扫"，不需要高频。
+            byte[] smallLuma = null;
+            int smallW = 0, smallH = 0;
+            if ((frameCounter++ % STYLIZED_FRAME_INTERVAL) == 0) {
+                smallLuma = grabSmallLuma(media, STYLIZED_LUMA_STEP);
+                if (smallLuma != null) {
+                    smallW = Math.max(1, media.getWidth() / STYLIZED_LUMA_STEP);
+                    smallH = Math.max(1, media.getHeight() / STYLIZED_LUMA_STEP);
+                }
+            }
+            final byte[] luma = smallLuma;
+            final int sw = smallW, sh = smallH;
+
             scanner.process(input)
                     .addOnSuccessListener(this, codes -> {
                         busy.set(false);
-                        if (codes != null && !codes.isEmpty()) onCodes(codes);
+                        if (codes != null && !codes.isEmpty()) {
+                            onCodes(codes);
+                        } else if (luma != null) {
+                            maybeDetectStylized(luma, sw, sh);
+                        }
                     })
                     .addOnFailureListener(this, e -> {
                         busy.set(false);
@@ -321,6 +353,85 @@ public class MainActivity extends AppCompatActivity {
         } finally {
             proxy.close();
         }
+    }
+
+    /**
+     * 把 Y 平面按步长抽稀成灰度小图（只取值、不做插值），供异形码判定使用。
+     *
+     * <p>为什么抽稀：判定里的连通域与极坐标自相关耗时随像素量增长，
+     * 720p 抽到 1/3 后约 427×240，单帧判定落在几十毫秒量级；
+     * 而这类码的定位点尺寸远大于 3px，抽稀不会破坏结构（Python 侧实测：
+     * 真正的限制是"不要把牛眼细环缩得太狠"，1/3 远未到那个程度）。
+     */
+    private byte[] grabSmallLuma(Image media, int step) {
+        try {
+            android.media.Image.Plane[] planes = media.getPlanes();
+            if (planes.length == 0) return null;
+            java.nio.ByteBuffer buf = planes[0].getBuffer();
+            int rowStride = planes[0].getRowStride();
+            int pw = media.getWidth(), ph = media.getHeight();
+            if (pw <= 0 || ph <= 0) return null;
+            int sw = Math.max(1, pw / step), sh = Math.max(1, ph / step);
+            byte[] out = new byte[sw * sh];
+            int p = 0;
+            for (int y = 0; y < sh; y++) {
+                int rowBase = (y * step) * rowStride;
+                for (int x = 0; x < sw; x++) {
+                    int idx = rowBase + x * step;
+                    out[p++] = (idx < buf.limit()) ? buf.get(idx) : 0;
+                }
+            }
+            return out;
+        } catch (Throwable t) {
+            Log.w(TAG, "抽稀灰度失败", t);
+            return null;
+        }
+    }
+
+    /**
+     * 相机帧里的异形码判定（限流）。
+     *
+     * <p>限流原因：判定要几十毫秒，逐帧跑会明显发热耗电；而且这类码是"对准了才扫"，
+     * 没必要高频。这里每 {@link #STYLIZED_FRAME_INTERVAL} 帧才判一次，
+     * 弹过结果后还要等 {@link #STYLIZED_COOLDOWN_MS} 冷却，避免连续弹窗。
+     *
+     * <p>小图是灰度，而判定用的是 HSV 特色分割（看饱和度）——灰度会退化，
+     * 但本模块的判据是**几何**（定位点排列 + 角向格律），实测在灰度下仍成立。
+     */
+    private void maybeDetectStylized(byte[] smallLuma, int sw, int sh) {
+        if (!scanning) return;
+        if (smallLuma == null || smallLuma.length == 0 || sw <= 0 || sh <= 0) return;
+        if (System.currentTimeMillis() < stylizedCooldownUntil) return;
+        if (!stylizedBusy.compareAndSet(false, true)) return;
+
+        final int fw = sw, fh = sh;
+
+        new Thread(() -> {
+            String kind = null;
+            try {
+                int[] px = new int[smallLuma.length];
+                for (int i = 0; i < smallLuma.length; i++) {
+                    int g = smallLuma[i] & 0xFF;            // NV21 的 Y 就是灰度，0..255
+                    px[i] = (0xFF << 24) | (g << 16) | (g << 8) | g;
+                }
+                StylizedDetector.Info info = new StylizedDetector(px, fw, fh).classify();
+                kind = info.isActionable() ? info.kind : null;
+                Log.i(TAG, "相机帧异形码判定: " + info);
+            } catch (Throwable t) {
+                Log.w(TAG, "相机帧异形码判定失败", t);
+            } finally {
+                stylizedBusy.set(false);
+            }
+            final String k = kind;
+            if (k == null) return;                          // 没认出来就静默，不打扰连续扫描
+            stylizedCooldownUntil = System.currentTimeMillis() + STYLIZED_COOLDOWN_MS;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                if (!scanning) return;
+                setScanning(false);
+                buzz(35);
+                showResult(null, null, vendorLabel(k), vendorNotice(k));
+            });
+        }, "stylized-frame").start();
     }
 
     /**
@@ -536,33 +647,52 @@ public class MainActivity extends AppCompatActivity {
 
     // ---------------- 语言切换 ----------------
 
-    /** 切换按钮上显示的是"切过去的目标语言"，所以当前中文时显示 English。 */
+    private static final String PREF_LANG = "lang_override";   // 空 = 跟随系统
+
+    @Override
+    protected void attachBaseContext(Context newBase) {
+        super.attachBaseContext(wrapLang(newBase));
+    }
+
+    /**
+     * 按用户选择套用界面语言。
+     *
+     * <p>为什么不用 `AppCompatDelegate.setApplicationLocales()`：它在部分设备/版本上
+     * 不生效（实测切换后界面没变），而且依赖 AndroidX 是否接管了 per-app language。
+     * 这里改为自己持久化 + 重建 Activity + 覆写 Configuration，行为在所有 API 上一致。
+     */
+    private static Context wrapLang(Context base) {
+        String code = base.getSharedPreferences("qrsuite", MODE_PRIVATE)
+                .getString(PREF_LANG, "");
+        if (code == null || code.isEmpty()) return base;       // 未选择 -> 跟随系统
+        java.util.Locale loc = new java.util.Locale(code);
+        java.util.Locale.setDefault(loc);
+        android.content.res.Configuration cfg =
+                new android.content.res.Configuration(base.getResources().getConfiguration());
+        cfg.setLocale(loc);
+        return base.createConfigurationContext(cfg);
+    }
+
+    private String currentLangCode() {
+        String saved = getSharedPreferences("qrsuite", MODE_PRIVATE).getString(PREF_LANG, "");
+        if (saved != null && !saved.isEmpty()) return saved;
+        return Locale.getDefault().getLanguage();               // 跟随系统
+    }
+
+    /** 切换按钮显示的是"切过去的目标语言"，所以当前中文时显示 English。 */
     private void updateLangButton() {
         if (btnLang == null) return;
-        boolean zh = isChineseNow();
+        boolean zh = "zh".equalsIgnoreCase(currentLangCode());
         btnLang.setText(zh ? "English" : "中文");
         btnLang.setContentDescription(zh ? "Switch to English" : "切换到中文");
     }
 
-    private boolean isChineseNow() {
-        String code = AppCompatDelegate.getApplicationLocales().toLanguageTags();
-        if (code == null || code.isEmpty()) {
-            // 未手动指定 -> 跟随系统
-            return "zh".equalsIgnoreCase(Locale.getDefault().getLanguage());
-        }
-        return code.toLowerCase(Locale.ROOT).startsWith("zh");
-    }
-
-    /**
-     * 中英切换。用 AppCompatDelegate 的应用级语言设置（AndroidX 会持久化并在
-     * 需要时重建 Activity），不自己写 locale 覆盖，避免与系统/其它库打架。
-     */
     private void toggleLang() {
-        boolean zh = isChineseNow();
-        AppCompatDelegate.setApplicationLocales(
-                zh ? LocaleListCompat.forLanguageTags("en")
-                   : LocaleListCompat.forLanguageTags("zh"));
-        // Activity 会被重建，按钮文案在重建后的 onCreate 里更新
+        boolean zh = "zh".equalsIgnoreCase(currentLangCode());
+        getSharedPreferences("qrsuite", MODE_PRIVATE).edit()
+                .putString(PREF_LANG, zh ? "en" : "zh").apply();
+        // 重建 Activity 让新语言生效（不依赖 AndroidX 的自动重建）
+        recreate();
     }
 
 
