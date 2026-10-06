@@ -103,6 +103,8 @@
   'binary.note': '解出了 {n} 字节的二进制数据（可打印占比 {p}%）—— 这不是文本，无法按文字显示。常见于乘车码、电子票据这类加密令牌。',
   'binary.runs': '其中的可读片段:',
   'binary.nameOnly': '（仅二进制，无可读字段）',
+  'binary.copyHint': '（「复制」与「复制解析源码」都会复制完整原始数据，不只是上面显示的片段）',
+  'btn.copyRaw': '复制解析源码',
   // 标签页
   'tab.decode': '🔍 解析二维码',
   'tab.generate': '✏️ 生成二维码',
@@ -230,6 +232,8 @@
   'binary.note': 'Decoded {n} bytes of binary data ({p}% printable) — this is not text and cannot be shown as characters. Typical of transit codes and encrypted tickets.',
   'binary.runs': 'Readable fragments:',
   'binary.nameOnly': '(binary only, no readable field)',
+  'binary.copyHint': '(both "Copy" and "Copy raw source" copy the complete original data, not just the fragments shown above)',
+  'btn.copyRaw': 'Copy raw source',
   // Tabs
   'tab.decode': '🔍 Decode',
   'tab.generate': '✏️ Generate',

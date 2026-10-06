@@ -98,6 +98,9 @@ main a{color:var(--acc)}
 .res.binary{border-left-color:#7a5cff}
 .res.binary .badge.cat{background:#2c2450;color:#a99cff;border-color:#4a3d80;margin-left:6px}
 .res.binary .val{white-space:pre-wrap;word-break:break-all}
+/* 「复制解析源码」按钮：与普通次要按钮区分，表明这是拿原始数据 */
+.res .row .b-raw{background:#2c2450;color:#c9c0ff;border-color:#4a3d80}
+.res .row .b-raw:hover{background:#3a2f66}
 
 /* ============ 标签页：解析 / 生成 ============ */
 .tabs{display:flex;gap:8px;margin:14px 0 4px}

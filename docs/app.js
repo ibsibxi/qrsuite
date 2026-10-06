@@ -426,7 +426,8 @@ function render(card, res, total, file) {
     d.innerHTML = `<div><span class="badge f"></span>${h.engines.map(e => `<span class="badge g">${e}</span>`).join('')}` +
       `${h.variants.slice(0, 4).map(v => `<span class="badge">${v}</span>`).join('')}` +
       (isBin ? `<span class="badge cat"></span>` : '') + `</div>
-      <div class="val"></div><div class="row"><button class="b-copy"></button><button class="b-open"></button></div>`;
+      <div class="val"></div><div class="row"><button class="b-copy"></button>` +
+      (isBin ? `<button class="b-raw"></button>` : `<button class="b-open"></button>`) + `</div>`;
     d.querySelector('.badge.f').textContent = h.format;
     if (isBin) {
       const st = binaryStats(h.text);
@@ -434,16 +435,32 @@ function render(card, res, total, file) {
       d.querySelector('.badge.cat').textContent = T('binary.tag');
       let note = T('binary.note', { n: st.bytes, p: Math.round(st.printableRatio * 100) });
       if (runs.length) note += '\n' + T('binary.runs') + ' ' + runs.join(' | ');
+      note += '\n' + T('binary.copyHint');
       d.querySelector('.val').textContent = note;
     } else {
       d.querySelector('.val').textContent = h.text;
     }
     const [b1, b2] = d.querySelectorAll('button');
     b1.textContent = T('btn.copy');
-    // 二进制没有可打开的链接，隐藏"打开"按钮
-    if (isBin) { b2.style.display = 'none'; } else { b2.textContent = T('btn.open'); }
-    b1.onclick = () => { navigator.clipboard.writeText(h.text).catch(() => { }); b1.textContent = T('btn.copied'); setTimeout(() => b1.textContent = T('btn.copy'), 1200); };
-    b2.onclick = () => window.open(h.text, '_blank');
+    if (isBin) {
+      // 「复制解析源码」：复制**完整原始字节**（不是上面显示的可读片段）。
+      // 片段只是给人看的摘要，真正有用的原始数据必须能整段拿走。
+      b2.textContent = T('btn.copyRaw');
+      b2.classList.add('b-raw');
+      b2.onclick = () => {
+        copyText(h.text);
+        b2.textContent = T('btn.copied');
+        setTimeout(() => b2.textContent = T('btn.copyRaw'), 1400);
+      };
+    } else {
+      b2.textContent = T('btn.open');
+      b2.onclick = () => window.open(h.text, '_blank');
+    }
+    b1.onclick = () => {
+      copyText(h.text);
+      b1.textContent = T('btn.copied');
+      setTimeout(() => b1.textContent = T('btn.copy'), 1200);
+    };
     body.appendChild(d);
     history_add({ name: file.name || 'clipboard', format: h.format, text: h.text, engines: h.engines, file: file.size, binary: isBin });
   });
@@ -480,10 +497,45 @@ function renderHistory() {
       <button data-copy="${encodeURIComponent(r.text)}">${esc(T('btn.copy'))}</button></div>`;
   }).join('');
   $('#hlist').querySelectorAll('button[data-copy]').forEach(b => b.onclick = () => {
-    navigator.clipboard.writeText(decodeURIComponent(b.dataset.copy)).catch(() => { }); b.textContent = '✓';
+    copyText(decodeURIComponent(b.dataset.copy)); b.textContent = '✓';
   });
 }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+/**
+ * 复制文本到剪贴板。
+ *
+ * 为什么不直接用 navigator.clipboard：① 它只在安全上下文（https/localhost）可用，
+ * 本地 file:// 打开时是 undefined；② 二进制源码可能很长（数百到数千字节）。
+ * 因此优先用 clipboard API，失败则回退到隐藏 textarea + execCommand。
+ */
+function copyText(text) {
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(() => fallbackCopy(text));
+      return true;
+    }
+  } catch (e) { /* 落到回退方案 */ }
+  return fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (e) {
+    console.warn('[QRSuite] 复制失败', e);
+    return false;
+  }
+}
 function download(name, text) {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
