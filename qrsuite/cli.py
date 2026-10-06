@@ -74,7 +74,24 @@ def cmd_scan(a, dec: Decoder):
                 allres.append(dict(source=item, text=None, format=st['label'],
                                    stylized=st))
         for h in r.hits:
-            print(f'  ✓ [{h.format}] {h.text}')
+            if h.is_binary:
+                # 二进制 payload（乘车码/令牌这类）：直接打印会是满屏乱码，
+                # 让用户误以为"没解析出来"。改为明确标注 + 可读摘要。
+                from .binary import describe
+                info = describe(h.text)
+                print(f'  ✓ [{h.format}] 二进制数据（{info["bytes"]} 字节，'
+                      f'可打印占比 {info["printable_ratio"]*100:.0f}%）'
+                      f' —— 这不是文本，无法按文字显示')
+                runs = [x for x in info['ascii_runs'] if len(x) >= 6]
+                if runs:
+                    print(f'      可读片段: ' + ' | '.join(runs[:4]))
+                print(f'      hex 头: {info["hex_head"]}')
+                if getattr(a, 'verbose', False):
+                    print('      hex dump:')
+                    for line in info['hex_dump'].split('\n'):
+                        print('        ' + line)
+            else:
+                print(f'  ✓ [{h.format}] {h.text}')
             print(f'     引擎: {", ".join(sorted(h.engines))} | 生效变体: {", ".join(sorted(h.variants))}')
             allres.append(dict(source=item, text=h.text, format=h.format,
                                engines=sorted(h.engines), variants=sorted(h.variants)))

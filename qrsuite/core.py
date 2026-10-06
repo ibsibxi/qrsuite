@@ -232,6 +232,9 @@ class Hit:
     format: str = '?'
     engines: set = field(default_factory=set)
     variants: set = field(default_factory=set)
+    # 该 payload 是否为二进制（乘车码/令牌这类）。是二进制时 text 直接显示会是乱码，
+    # 调用方应改用 qrsuite.binary.describe() 的可读呈现（见该模块文档）。
+    is_binary: bool = False
 
 @dataclass
 class Result:
@@ -248,7 +251,8 @@ class Result:
     stylized_elapsed: float = 0.0
     def to_dict(self):
         return dict(results=[dict(text=h.text, format=h.format, engines=sorted(h.engines),
-                                  variants=sorted(h.variants)) for h in self.hits],
+                                  variants=sorted(h.variants), is_binary=h.is_binary)
+                             for h in self.hits],
                     stages=self.stages_tried, engine_runs=self.engine_runs,
                     elapsed=round(self.elapsed, 3), cpu=round(self.cpu, 3),
                     early=self.stopped_early, error=self.error,
@@ -321,7 +325,10 @@ class Decoder:
                         if not text: continue
                         h = hits.get(text)
                         if h is None:
-                            h = hits[text] = Hit(text=text, format=fmt)
+                            # 二元判定只做一次：payload 是二进制时（乘车码/令牌），
+                            # 界面直接显示 text 会是乱码，调用方应改用 binary.describe()
+                            from .binary import looks_binary
+                            h = hits[text] = Hit(text=text, format=fmt, is_binary=looks_binary(text))
                         h.engines.add(eng_name); h.variants.add(name)
                     if _DBG:
                         print(f'  [dbg] {name} / {eng_name} -> {len(pairs)}', file=sys.stderr)
