@@ -10,11 +10,11 @@
 | 项 | 值 |
 |---|---|
 | 包名 | `com.qrsuite.scanner` |
-| 版本 | versionName 2.0.2 / versionCode 1 |
+| 版本 | versionName 2.1.2 / versionCode 4 |
 | minSdk / targetSdk | 26 / 35（Android 8.0 及以上） |
 | ABI | 仅 `arm64-v8a` |
 | 体积 | 约 7.9 MB |
-| 签名 | debug 签名（自用直装）+ APK Signature Scheme v2 |
+| 签名 | 配置 keystore（`signing.properties` 或 CI Secrets）后用**正式签名**；未配置时回退 debug 签名并告警。均含 APK Signature Scheme v2 |
 | 权限 | CAMERA、VIBRATE、READ_MEDIA_IMAGES（≤32 为 READ_EXTERNAL_STORAGE） |
 
 正式发布给别人用时应换成自己的 keystore（见 `app/build.gradle` 的 `signingConfigs`）。
@@ -66,7 +66,7 @@ cd E:\学习\qcode\01-qrsuite-v2\android
 ```powershell
 $adb='E:\学习\Android\sdk\platform-tools\adb.exe'
 & $adb devices -l                                    # 确认设备状态为 device（不是 offline）
-& $adb install -r 'E:\学习\qcode\06-构建产物\android\QRSuite-2.0.2-arm64.apk'
+& $adb install -r 'E:\学习\qcode\06-构建产物\android\QRSuite-2.1.2-arm64.apk'
 & $adb shell am start -n com.qrsuite.scanner/.MainActivity
 & $adb shell pidof com.qrsuite.scanner               # 有输出=进程存活
 & $adb logcat -d | Select-String 'FATAL|ClassCast'   # 崩溃排查
@@ -129,11 +129,11 @@ $adb='E:\学习\Android\sdk\platform-tools\adb.exe'
 - ✅ 历史面板：修复 `ClassCastException` 后正常渲染、可清空
 - ✅ 正式签名：`CN=QRSuite`（不再是 debug 证书），v2 签名校验通过
 
-**已知限制**
-- ❌ **解不了样式化私有码**：抖音主页码、微信赞赏码的模块是**圆点/圆环**、定位符也是圆环，
-  ML Kit 与所有通用解码器一样结构上匹配不上（详见 `../../02-测试用例/real/` 的两张真实样例，
-  以及交接说明里的穷举实验记录）。失败时会提示用户改用对应 App 扫码。
-- 圆度启发式自动判定"这是样式化码"**已评估但放弃**：真实私有码与模糊标准码的圆度分布重叠
-  （标准码可达 0.80，抖音码只有 0.66），仅 2 个正样本不足以调参，误报会误导用户，故只用措辞提示。
-- 版本号：只发 arm64；armeabi-v7a / x86 设备装不上。
+**已知限制与当前能力**
+- ❌ **无法解码样式化私有码的内容**：抖音主页码、微信赞赏码的模块是**圆点/圆环**、定位符也是圆环，
+  ML Kit 与所有通用解码器一样结构上匹配不上（详见交接说明里的穷举实验记录）。
+- ✅ **厂商判定已移植到 Android（2.1.1 起）**：`StylizedDetector.java` 从 `qrsuite/stylized.py` 逐字移植，
+  仅在 ML Kit 未命中时于后台线程运行，自动判定「这是抖音主页码 / 微信小程序码 / 微信赞赏码」并提示用对应 App 扫描。
+  判定内核用的是「牛眼几何 + 角向格律」，而非早期评估后放弃的圆度启发式（真实私有码与模糊标准码的圆度分布重叠、易误报）。
+- 只发 arm64；armeabi-v7a / x86 设备装不上。
 - 本机 adb 在持续操作时会掉线（USB 供电/线材），需要重新插拔。

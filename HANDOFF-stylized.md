@@ -47,8 +47,7 @@ E:\学习\qcode\07-太阳码调研         ← 本轮调研的原始材料与工
 E:\学习\qcode\02-测试用例\real      ← 测试样本（真实抖音码 / 微信赞赏码 / 普通码照片）
 ```
 
-**注意**：改动**尚未 commit**（见 `git status`：10 个 `M` + 2 个新增文件 `??`）。
-接手时先 `git status` 看清楚，再决定怎么提交。
+**状态更新（v2.1.1，后续升至 2.1.2）**：这些改动**已 commit 并合入上游**（含 Android 侧移植），工作区已干净，不再是待提交状态。
 
 ---
 
@@ -57,15 +56,15 @@ E:\学习\qcode\02-测试用例\real      ← 测试样本（真实抖音码 / �
 | 文件 | 性质 | 说明 |
 |---|---|---|
 | `qrsuite/stylized.py` | **新增** | 结构判定与几何测量（核心交付物） |
-| `tests/test_stylized.py` | **新增** | 回归测试（6 项断言：判定 + 几何精度 + <0.6s 性能预算） |
+| `tests/test_stylized.py` | **新增** | 回归测试（18 项断言：2 正例判定 + 几何精度 + <0.6s 性能预算 + 12 张反例误判清零） |
 | `qrsuite/core.py` | 改 | `Result` 加 `stylized`/`stylized_elapsed`；`decode_*` 加 `stylized=True`；**仅未命中时**运行判定 |
 | `qrsuite/cli.py` | 改 | `--stylized/--no-stylized`（默认开）；输出「ⓘ 结构判定」；JSON 带 `stylized` |
-| `qrsuite/__init__.py` | 改 | 版本 → `2.1.0`，导出 `StylizedInfo` / `classify_stylized` |
+| `qrsuite/__init__.py` | 改 | 版本 → `2.1.1`，导出 `StylizedInfo` / `classify_stylized` |
 | `docs/app.js` | 改 | 未解码时渲染判定块 |
 | `docs/i18n.js` | 改 | 补中英文案 4 键（`stylized.*`） |
 | `docs/style.css` | 改 | `.dim` / `.res.stylized` 样式 |
-| `docs/sw.js` | 改 | 缓存版本 `2.0.7` → `2.1.0`（本仓库约定：改 docs 必升版本） |
-| `README.md` / `CHANGELOG.md` / `tools/NOTES-stylized-codes.md` | 改 | 文档：新增「解不出来的那类码」章节、2.1.0 变更、本轮实测证据 |
+| `docs/sw.js` | 改 | 缓存版本 `2.0.7` → `2.1.1`（本仓库约定：改 docs 必升版本） |
+| `README.md` / `CHANGELOG.md` / `tools/NOTES-stylized-codes.md` | 改 | 文档：新增「解不出来的那类码」章节、2.1.1 变更、本轮实测证据 |
 
 ---
 
@@ -76,7 +75,7 @@ cd E:\学习\qcode\01-qrsuite-v2
 
 # 1) 回归测试（必须先全过）
 python tests\smoke_test.py          # 期望 ALL PASSED
-python tests\test_stylized.py       # 期望 6 通过 / 0 失败
+python tests\test_stylized.py       # 期望 18 通过 / 0 失败
 
 # 2) 端到端看效果
 python -m qrsuite ..\02-测试用例\real\real_douyin.jpg ..\02-测试用例\real\real_wechat_reward.jpg
@@ -212,4 +211,4 @@ _fit_tri_center(pts)        # 3 牛眼 = 矩形三角 → 圆心 = 另两角中�
 2. **提升判定精度**：目前靠手调阈值。若要更稳，需要**更多标注样本**（每类 10–20 张，
    覆盖不同背景/角度/尺寸），然后用手工特征（环宽序列、定位点数量与半径分布、角向分度、
    盘心一致性）训一个轻量分类器，并给出混淆矩阵。
-3. **提交代码**：改动还没 commit。注意本机 git 身份是占位值，提交前先改成真名真邮箱。
+3. ~~**提交代码**~~ **已完成**：改动已 commit 并合入上游（v2.1.1）。

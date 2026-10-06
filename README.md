@@ -136,10 +136,7 @@ python -m qrsuite --fetch-models                # 下载 WeChatQRCode 模型（�
 2. 仓库 **Settings → Pages → Build and deployment → Source** 选 `Deploy from a branch`，分支选 `main`、目录选 **`/docs`** → Save。
 3. 等 1 分钟，访问 `https://<你的用户名>.github.io/<仓库名>/`。
 
-或者用自带的 GitHub Actions 工作流（推送到 `main` 时自动发布）：
-
-- `.github/workflows/pages.yml` 已配置好 `upload-pages-artifact (path: docs)` + `deploy-pages`。
-- 只需在 Settings → Pages → Source 里选 **`GitHub Actions`**。
+> 说明：仓库自带的 GitHub Actions 工作流只有 `android.yml` / `release.yml` / `windows.yml`（分别用于构建 APK、发 Release、打包 Windows），**并没有 Pages 部署工作流**。网页发布直接用上方的 `Deploy from a branch`（源分支 `main`、目录 `/docs`）即可。
 
 > 提示：Pages 是纯静态托管，**没有后端**，因此线上的网页使用浏览器端解码（jsQR + ZXing-js）。
 > 需要 OpenCV / WeChatQRCode 这类更强引擎时，在本机跑 `python -m qrsuite --serve`，页面会自动出现「本机增强引擎」开关。
@@ -154,6 +151,7 @@ qrsuite-v2/
 │  ├─ core.py               #   引擎注册 + 级联/早退策略 + 统计
 │  ├─ cli.py                #   统一命令行入口（scan / serve / fetch-models）
 │  ├─ web.py                #   本地 HTTP 服务（含结果缓存）
+│  ├─ winapp.py             #   Windows 单文件版入口（启动本地服务并自动开浏览器）
 │  ├─ stylized.py           #   样式化私有码结构识别（微信小程序码/赞赏码、抖音主页码）
 │  └─ models.py             #   WeChatQRCode 模型下载（多镜像回退）
 ├─ docs/                    # ← GitHub Pages 站点根目录
@@ -167,7 +165,7 @@ qrsuite-v2/
 │  ├─ bench.py              # v1 vs v2 基准对比
 │  ├─ smoke_test.py         # 冒烟测试（引擎可用性 + 端到端解码）
 │  └─ test_stylized.py      # 私有码结构判定回归（判定 + 几何精度 + 性能预算）
-├─ .github/workflows/pages.yml
+├─ .github/workflows/         # android.yml · release.yml · windows.yml
 ├─ requirements.txt
 ├─ run.bat                  # Windows 一键入口（网页版 / 命令行 / 模型下载）
 └─ LICENSE · THIRD_PARTY_NOTICES.md
