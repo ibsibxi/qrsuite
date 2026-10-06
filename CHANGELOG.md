@@ -7,23 +7,30 @@
 ## [2.0.4] — 2026-10-06
 
 ### 新增 Added
-- **网页端中英双语**：\docs/i18n.js\（78 个文案键，中英完全对齐），右上角一键切换，
-  并自动跟随浏览器语言（\zh*\ → 中文，其余 → 英文）。Android 同步补 es/values-en\。
-- **Android 发布由 CI 自动签名**：打 \*\ tag 触发 \.github/workflows/release.yml\，
+- **网页端中英双语**：`docs/i18n.js`（78 个文案键，中英完全对齐），右上角一键切换，
+  并自动跟随浏览器语言（`zh*` → 中文，其余 → 英文）。Android 同步补 `res/values-en`。
+- **Android 发布由 CI 自动签名**：打 `v*` tag 触发 `.github/workflows/release.yml`，
   构建正式签名 APK → 自动校验「不是 debug 证书」→ 上传到对应 Release。
-- Windows 构建/签名脚本 \	ools/build_windows.py\（\--sign\ 走 \signtool\）与
-  \.github/workflows/windows.yml\（配置证书 Secrets 后自动签名）。
+- Windows 构建/签名脚本 `tools/build_windows.py`（`--sign` 走 `signtool`）与
+  `.github/workflows/windows.yml`（配置证书 Secrets 后自动签名）。
 
 ### 修复 Fixed
 - **彩色/蓝屏照片解不出码**：浏览器端只用亮度公式灰度，而蓝色 LCD 的蓝色通道占绝对主导，
   亮度公式给蓝仅 0.114 权重，导致白底/码点灰度差被压到 149，jsQR 判不出。
   现对彩色图增加**逐通道灰度**（按对比度从高到低尝试原图与 Otsu）。
   实测 43 张样例解出数 36 → 37、总耗时未增加、无回归。
-- **状态条永久停在「正在初始化…」**：\#env\ 挂了 \data-i18n\，i18n 的 \pply()\ 在
+- **状态条永久停在「正在初始化…」**：`#env` 挂了 `data-i18n`，i18n 的 `apply()` 在
   DOMContentLoaded 时用 textContent 覆盖了 app.js 刚写入的环境信息。
-- **\data-i18n-html\ 元素漏译**：\querySelectorAll('[data-i18n]')\ 不匹配
-  \data-i18n-html/-title/-content\（属性名不同），导致两处含内联标签的文案在英文界面下仍为中文。
-- 页脚链接此前无 \\ 规则、使用浏览器默认链接蓝，现统一为品牌色。
+- **`data-i18n-html` 元素漏译**：`querySelectorAll('[data-i18n]')` 不匹配
+  `data-i18n-html/-title/-content`（属性名不同），导致两处含内联标签的文案在英文界面下仍为中文。
+- 页脚链接此前无 `a` 规则、使用浏览器默认链接蓝，现统一为品牌色。
+
+### 文档 Docs
+
+- 本节初稿经过一轮转义处理后损坏了：反引号变成反斜杠，而 `\t`、`\v`、`\a`、`\r` 又被当作转义
+  序列吃掉，连带吞掉 `tools`、`v*`、`apply()`、`res/values-en` 与 CSS 的 `a` 等 token。
+  已逐条对照 `docs/i18n.js`（78 个键）、`res/values-en` 与 `.github/workflows/` 三个文件还原核对。
+
 
 ---
 

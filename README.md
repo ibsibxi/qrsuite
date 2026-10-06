@@ -25,7 +25,7 @@
 | 平台 | 文件 | 说明 |
 |---|---|---|
 | **Android** | [QRSuite-2.0.4-arm64.apk](https://github.com/ibsibxi/qrsuite/releases/download/v2.0.4/QRSuite-2.0.4-arm64.apk) | 7.59 MB，原生 CameraX + ML Kit，**仅 arm64**（现代手机），正式签名，无网络权限，中/英界面 |
-| **Windows** | [QRSuite.exe](https://github.com/ibsibxi/qrsuite/releases/tag/v2.0.3) | 80 MB，单文件版，双击启动本地服务并自动开浏览器 |
+| **Windows** | [QRSuite.exe](https://github.com/ibsibxi/qrsuite/releases/download/v2.0.4/QRSuite.exe) | 80 MB，单文件版，双击启动本地服务并自动开浏览器 |
 
 > Android 装上后若曾装过 debug 签名版，需先卸载（签名不同无法覆盖安装）。
 > Windows 目前**无数字签名**，SmartScreen 会提示"已保护你的电脑"，点"仍要运行"即可；
@@ -133,10 +133,12 @@ python -m qrsuite --fetch-models                # 下载 WeChatQRCode 模型（�
 2. 仓库 **Settings → Pages → Build and deployment → Source** 选 `Deploy from a branch`，分支选 `main`、目录选 **`/docs`** → Save。
 3. 等 1 分钟，访问 `https://<你的用户名>.github.io/<仓库名>/`。
 
-或者用自带的 GitHub Actions 工作流（推送到 `main` 时自动发布）：
+仓库**没有** Pages 部署工作流，静态站走上面第 2 步的 branch 直发即可。
+`.github/workflows/` 下的 `android.yml` / `release.yml` / `windows.yml` 都只构建 Android 与 Windows 产物，
+不涉及 Pages。若想改用 Actions 发布，需自建 `pages.yml`：
 
-- `.github/workflows/pages.yml` 已配置好 `upload-pages-artifact (path: docs)` + `deploy-pages`。
-- 只需在 Settings → Pages → Source 里选 **`GitHub Actions`**。
+- `actions/upload-pages-artifact`（`path: docs`）+ `actions/deploy-pages`。
+- 然后在 Settings → Pages → Source 里选 **`GitHub Actions`**。
 
 > 提示：Pages 是纯静态托管，**没有后端**，因此线上的网页使用浏览器端解码（jsQR + ZXing-js）。
 > 需要 OpenCV / WeChatQRCode 这类更强引擎时，在本机跑 `python -m qrsuite --serve`，页面会自动出现「本机增强引擎」开关。
@@ -162,7 +164,7 @@ qrsuite-v2/
 ├─ tests/
 │  ├─ bench.py              # v1 vs v2 基准对比
 │  └─ smoke_test.py         # 冒烟测试（引擎可用性 + 端到端解码）
-├─ .github/workflows/pages.yml
+├─ .github/workflows/       # android.yml（debug 构建）· release.yml（签名发布）· windows.yml（exe）
 ├─ requirements.txt
 ├─ run.bat                  # Windows 一键入口（网页版 / 命令行 / 模型下载）
 └─ LICENSE · THIRD_PARTY_NOTICES.md

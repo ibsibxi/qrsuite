@@ -167,7 +167,7 @@ WebView 方案需要把 `docs/` 打进 assets，且相机/Worker 需要 https �
 更根本的是，微信赞赏码/小程序码是**同心圆环结构**，数据按环排布，
 还原链接或 `scene` 参数需要**平台服务端的业务密钥**；抖音码同理。
 这已不属于解码器能力问题，而是平台私有加密协议。详见
-[`tools/NOTES-stylized-codes.md`](NOTES-stylized-codes.md)（含对若干第三方方案的评估结论）。
+[`tools/NOTES-stylized-codes.md`](../tools/NOTES-stylized-codes.md)（含对若干第三方方案的评估结论）。
 
 ---
 
@@ -191,5 +191,6 @@ WebView 方案需要把 `docs/` 打进 assets，且相机/Worker 需要 https �
 │       └── HistoryStore.java      历史记录（SQLite）
 ├── tests/              smoke_test.py（引擎与早退自检）、bench.py（性能对比）
 ├── tools/              构建与实验脚本、踩坑与调研记录
-└── .github/workflows/  Pages 部署 + Android CI
+└── .github/workflows/  android.yml（PR/push 编译 debug APK）、release.yml（`v*` tag 正式签名 Android）、
+                        windows.yml（同一 tag 构建/签名单文件 exe）；Pages 走 branch 直发，无工作流
 ```

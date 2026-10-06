@@ -599,7 +599,11 @@ A：换国内源：<code>python -m pip install -r requirements.txt -i https://py
 <p><strong>Q：中文路径/中文文件名读不了？</strong>
 A：Python 版用 Pillow 读图并做了 EXIF 方向处理，中文路径没问题。若你用其它库自行调用，注意 Windows 上 <code>cv2.imread</code> 不支持中文路径（本项目已规避）。</p>
 <p><strong>Q：杀毒软件报警？</strong>
-A：本项目没有可执行文件（<code>.bat</code> 只是调用 Python）。若你保留了 v1 的 <code>QRCodeScanner.exe</code>，它未签名，可能触发 SmartScreen——那是原程序的事，与本项目无关。</p>
+A：仓库里只有源码，<code>.bat</code> 也只是调用 Python，不带任何可执行文件。Releases 里的 <strong>Windows 单文件版
+<code>QRSuite.exe</code> 是 PyInstaller 打的</strong>，这类自解压包被杀软误报、被 SmartScreen 拦「已保护你的电脑」都很常见；
+CI 未配置代码签名证书时它必然是未签名的（要自己签：<code>python tools/build_windows.py --sign</code>，凭据走
+<code>QRSUITE_SIGN_PFX</code> / <code>QRSUITE_SIGN_PFX_PASS</code> 等环境变量）。若你保留了 v1 的 <code>QRCodeScanner.exe</code>，那是原作自己的
+未签名产物，与本项目无关。介意的话直接用 <code>python -m qrsuite</code> 或网页版。</p>
 <p><strong>Q：图片会被上传吗？</strong>
 A：不会。本地服务只监听 <code>127.0.0.1</code>，浏览器版全部在本机内存解码。唯一的网络请求是你在命令行里<strong>主动</strong>传入图片 URL 时的那次下载。</p>
 <p><strong>Q：识别结果里同时出现多个引擎徽章，是重复了吗？</strong>
@@ -613,12 +617,15 @@ A：没有硬上限。页面按 CPU 核数并发解码（最多 4 个 Worker）�
 <h3 id="91-github-pages">9.1 部署到 GitHub Pages</h3>
 <ol>
 <li>推送到 GitHub（分支 <code>main</code>）。</li>
-<li><strong>Settings → Pages → Source</strong>：
-   - 选 <code>Deploy from a branch</code> → <code>main</code> → <code>/docs</code>，保存后 1 分钟上线；<strong>或</strong>
-   - 选 <code>GitHub Actions</code>，由 <code>.github/workflows/pages.yml</code> 自动发布。</li>
+<li><strong>Settings → Pages → Source</strong>：选 <code>Deploy from a branch</code> → <code>main</code> → <code>/docs</code>，保存后 1 分钟上线。</li>
 <li>访问 <code>https://&lt;用户名&gt;.github.io/&lt;仓库名&gt;/</code>。</li>
 </ol>
 <blockquote>
+<p>本仓库<strong>没有</strong> Pages 部署工作流，静态站只能走上面的 branch 直发。<code>.github/workflows/</code> 下的三个文件
+都不涉及 Pages：<code>android.yml</code>（PR/push 跑 <code>:app:assembleDebug</code>，验证能编译并上传 debug APK）、
+<code>release.yml</code>（打 <code>v*</code> tag 时正式签名并挂到 Release）、<code>windows.yml</code>（同一 tag 构建/签名单文件 exe）。
+想用 Actions 发布 Pages 需自建 <code>pages.yml</code>（<code>actions/upload-pages-artifact</code> 指定 <code>path: docs</code>
++ <code>actions/deploy-pages</code>），再把 Source 切成 <code>GitHub Actions</code>。</p>
 <p><code>docs/</code> 已包含 <code>.nojekyll</code>，且所有前端资源本地化，无 CDN 依赖，离线也能用。</p>
 </blockquote>
 <h3 id="92">9.2 升级前端解码库</h3>
@@ -636,7 +643,13 @@ node -e &quot;require('./docs/decode.js')&quot;           # 前端解码模块�
 <h3 id="94">9.4 发版建议</h3>
 <ul>
 <li>语义化版本：破坏性改动 <code>3.0.0</code>，新引擎/新模式 <code>2.1.0</code>，修复 <code>2.0.1</code>。</li>
-<li>更新 <code>qrsuite/__init__.py</code> 的 <code>__version__</code>，并在 README 顶部补变更摘要。</li>
+<li><strong>三个版本号互不相干，别指望它们一致，也别拿其中一个去推另一个</strong>（括号里是 2.0.4 时的真实值）：</li>
+<li><code>qrsuite/__init__.py</code> 的 <code>__version__</code>（2.0.3）——Python 版自己的版本；</li>
+<li><code>android/app/build.gradle</code> 的 <code>versionName</code> / <code>versionCode</code>（2.0.4 / 2）——Android 独立版本，
+    <code>release.yml</code> 用 <code>versionName</code> 拼产物文件名 <code>QRSuite-&lt;versionName&gt;-arm64.apk</code>，<code>versionCode</code> 必须单调递增；</li>
+<li><code>docs/sw.js</code> 的 <code>CACHE</code>（<code>qrsuite-v2.0.7</code>）——<strong>只是 PWA cache-buster，只增不减，不跟版本号绑定</strong>，
+    唯一作用是新资源上线时让旧缓存失效。把它「对齐」成当前版本会缓存不到东西，别改小它。</li>
+<li>发版时还要在 <code>CHANGELOG.md</code> 新增一节，并在 README 顶部补变更摘要。</li>
 </ul>
 <hr />
 <h2 id="10">10. 附录</h2>

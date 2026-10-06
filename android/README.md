@@ -10,11 +10,12 @@
 | 项 | 值 |
 |---|---|
 | 包名 | `com.qrsuite.scanner` |
-| 版本 | versionName 2.0.2 / versionCode 1 |
+| 版本 | versionName 2.0.4 / versionCode 2 |
 | minSdk / targetSdk | 26 / 35（Android 8.0 及以上） |
 | ABI | 仅 `arm64-v8a` |
 | 体积 | 约 7.9 MB |
-| 签名 | debug 签名（自用直装）+ APK Signature Scheme v2 |
+| 界面语言 | 中 / 英（`res/values` + `res/values-en`，跟随系统） |
+| 签名 | 有正式证书时用正式证书，**两者都缺失时静默回退 debug 签名**（见 `app/build.gradle` 的 `signingConfigs`）；产物均带 APK Signature Scheme v2 |
 | 权限 | CAMERA、VIBRATE、READ_MEDIA_IMAGES（≤32 为 READ_EXTERNAL_STORAGE） |
 
 正式发布给别人用时应换成自己的 keystore（见 `app/build.gradle` 的 `signingConfigs`）。
@@ -48,6 +49,14 @@ cd E:\学习\qcode\01-qrsuite-v2\android
 脚本已封装必需的环境变量（JAVA_HOME / GRADLE_USER_HOME / ANDROID_USER_HOME / ANDROID_HOME）。
 
 产物：`android\app\build\outputs\apk\release\app-release.apk`
+
+> CI 侧分工：`.github/workflows/android.yml` 只跑 `:app:assembleDebug`（验证源码可构建、上传 debug APK）；
+> 正式签名由打 `v*` tag 触发的 `.github/workflows/release.yml` 完成——keystore 与口令来自仓库 Secrets
+> （`SIGNING_KEYSTORE_BASE64` / `SIGNING_STORE_PASSWORD` / `SIGNING_KEY_ALIAS` / `SIGNING_KEY_PASSWORD`），
+> 产物自动挂到对应 Release，并用 `apksigner verify --print-certs` 校验证书不是 debug。
+> 本机签名走同一份 `signingConfigs`：优先环境变量 `QRSUITE_KEYSTORE` 等，否则读仓库外的
+> `signing.properties`；缺这些材料时 `assembleRelease` 会**静默回退 debug 签名**，
+> 上传前务必核对 `apksigner verify --print-certs` 输出的 `CN=QRSuite`。
 
 手动等价命令：
 

@@ -348,7 +348,11 @@ A：换国内源：`python -m pip install -r requirements.txt -i https://pypi.tu
 A：Python 版用 Pillow 读图并做了 EXIF 方向处理，中文路径没问题。若你用其它库自行调用，注意 Windows 上 `cv2.imread` 不支持中文路径（本项目已规避）。
 
 **Q：杀毒软件报警？**
-A：本项目没有可执行文件（`.bat` 只是调用 Python）。若你保留了 v1 的 `QRCodeScanner.exe`，它未签名，可能触发 SmartScreen——那是原程序的事，与本项目无关。
+A：仓库里只有源码，`.bat` 也只是调用 Python，不带任何可执行文件。Releases 里的 **Windows 单文件版
+`QRSuite.exe` 是 PyInstaller 打的**，这类自解压包被杀软误报、被 SmartScreen 拦「已保护你的电脑」都很常见；
+CI 未配置代码签名证书时它必然是未签名的（要自己签：`python tools/build_windows.py --sign`，凭据走
+`QRSUITE_SIGN_PFX` / `QRSUITE_SIGN_PFX_PASS` 等环境变量）。若你保留了 v1 的 `QRCodeScanner.exe`，那是原作自己的
+未签名产物，与本项目无关。介意的话直接用 `python -m qrsuite` 或网页版。
 
 **Q：图片会被上传吗？**
 A：不会。本地服务只监听 `127.0.0.1`，浏览器版全部在本机内存解码。唯一的网络请求是你在命令行里**主动**传入图片 URL 时的那次下载。
@@ -369,10 +373,14 @@ A：没有硬上限。页面按 CPU 核数并发解码（最多 4 个 Worker）�
 ### 9.1 部署到 GitHub Pages
 
 1. 推送到 GitHub（分支 `main`）。
-2. **Settings → Pages → Source**：
-   - 选 `Deploy from a branch` → `main` → `/docs`，保存后 1 分钟上线；**或**
-   - 选 `GitHub Actions`，由 `.github/workflows/pages.yml` 自动发布。
+2. **Settings → Pages → Source**：选 `Deploy from a branch` → `main` → `/docs`，保存后 1 分钟上线。
 3. 访问 `https://<用户名>.github.io/<仓库名>/`。
+
+> 本仓库**没有** Pages 部署工作流，静态站只能走上面的 branch 直发。`.github/workflows/` 下的三个文件
+> 都不涉及 Pages：`android.yml`（PR/push 跑 `:app:assembleDebug`，验证能编译并上传 debug APK）、
+> `release.yml`（打 `v*` tag 时正式签名并挂到 Release）、`windows.yml`（同一 tag 构建/签名单文件 exe）。
+> 想用 Actions 发布 Pages 需自建 `pages.yml`（`actions/upload-pages-artifact` 指定 `path: docs`
+> + `actions/deploy-pages`），再把 Source 切成 `GitHub Actions`。
 
 > `docs/` 已包含 `.nojekyll`，且所有前端资源本地化，无 CDN 依赖，离线也能用。
 
@@ -397,7 +405,13 @@ node -e "require('./docs/decode.js')"           # 前端解码模块可加载
 ### 9.4 发版建议
 
 - 语义化版本：破坏性改动 `3.0.0`，新引擎/新模式 `2.1.0`，修复 `2.0.1`。
-- 更新 `qrsuite/__init__.py` 的 `__version__`，并在 README 顶部补变更摘要。
+- **三个版本号互不相干，别指望它们一致，也别拿其中一个去推另一个**（括号里是 2.0.4 时的真实值）：
+  - `qrsuite/__init__.py` 的 `__version__`（2.0.3）——Python 版自己的版本；
+  - `android/app/build.gradle` 的 `versionName` / `versionCode`（2.0.4 / 2）——Android 独立版本，
+    `release.yml` 用 `versionName` 拼产物文件名 `QRSuite-<versionName>-arm64.apk`，`versionCode` 必须单调递增；
+  - `docs/sw.js` 的 `CACHE`（`qrsuite-v2.0.7`）——**只是 PWA cache-buster，只增不减，不跟版本号绑定**，
+    唯一作用是新资源上线时让旧缓存失效。把它「对齐」成当前版本会缓存不到东西，别改小它。
+- 发版时还要在 `CHANGELOG.md` 新增一节，并在 README 顶部补变更摘要。
 
 ---
 
