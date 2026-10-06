@@ -369,10 +369,9 @@ function binaryStats(s) {
   return { bytes: bytes, chars: s.length, printableRatio: bytes ? printable / bytes : 0 };
 }
 
-/** 把 payload 还原成原始字节并编码为 Base64。
- *  为什么不直接复制原文：原文含大量控制字符，粘进记事本/表格容易变形或显示不全；
- *  Base64 是纯 ASCII、长度确定、可无损还原，适合"把源码带走"这个用途。 */
-function payloadBase64(s) {
+/** 把 payload 还原成原始字节串（每字符 1 字节）。
+ *  解码器把二进制逐字节直译成字符（Latin-1 映射 / 代理转义），这里逆向还原。 */
+function payloadBytes(s) {
   let bytes = '';
   for (let i = 0; i < s.length; i++) {
     const o = s.charCodeAt(i);
@@ -380,7 +379,16 @@ function payloadBase64(s) {
     else if (o <= 0xFF) bytes += String.fromCharCode(o);
     else bytes += '?';
   }
-  try { return btoa(bytes); } catch (e) { return ''; }
+  return bytes;
+}
+
+/** payload 的 Base64（纯 ASCII、可无损还原）。
+ *  为什么二进制只给 Base64 而不给"复制原文"：
+ *  实测剪贴板把文本按纯文本传输，会把 \n 规范化成 \r\n
+ *  （源 317 字符 → 剪贴板 318 字符，第 86 位 0x0A 变 0x0D 0x0A）。
+ *  对二进制这是真损坏，所以原文路径不可靠，Base64 才无损。 */
+function payloadBase64(s) {
+  try { return btoa(payloadBytes(s)); } catch (e) { return ''; }
 }
 
 /* ============================ 5. 渲染 ============================ */
@@ -446,8 +454,8 @@ function render(card, res, total, file) {
     d.innerHTML = `<div><span class="badge f"></span>${h.engines.map(e => `<span class="badge g">${e}</span>`).join('')}` +
       `${h.variants.slice(0, 4).map(v => `<span class="badge">${v}</span>`).join('')}` +
       (isBin ? `<span class="badge cat"></span>` : '') + `</div>
-      <div class="val"></div><div class="row"><button class="b-copy"></button>` +
-      (isBin ? `<button class="b-raw"></button><button class="b-b64"></button>` : `<button class="b-open"></button>`) + `</div>`;
+      <div class="val"></div><div class="row"><button class="b-b64"></button>` +
+      (isBin ? `<button class="b-dl"></button>` : `<button class="b-open"></button>`) + `</div>`;
     d.querySelector('.badge.f').textContent = h.format;
     if (isBin) {
       const st = binaryStats(h.text);
@@ -461,34 +469,46 @@ function render(card, res, total, file) {
       d.querySelector('.val').textContent = h.text;
     }
     const btns = d.querySelectorAll('button');
-    const b1 = btns[0];
-    b1.textContent = T('btn.copy');
     if (isBin) {
-      // 「复制解析源码」：复制完整原始数据（长度与上面标注的字符数一致）。
-      const bRaw = btns[1], bB64 = btns[2];
-      bRaw.textContent = T('btn.copyRaw');
-      bRaw.onclick = () => {
-        copyText(h.text);
-        bRaw.textContent = T('btn.copied');
-        setTimeout(() => bRaw.textContent = T('btn.copyRaw'), 1400);
-      };
-      // 「复制 Base64」：纯 ASCII、无损、贴到任何地方都不变形，适合带走源码
+      // 二进制**只给 Base64 与二进制下载**，不提供"复制原文"。
+      // 原因（实测）：剪贴板把文本当纯文本传输，会把 \n 规范化成 \r\n ——
+      //   源 317 字符 vs 剪贴板 318 字符，第 86 位 0x0A 变成 0x0D+0x0A。
+      // 对二进制而言这是**真损坏**（0x0A ≠ 0x0D 0x0A），所以原文路径必然有损，
+      // 不能给用户一个"看起来能拿走源码、其实被改过"的按钮。
+      const bB64 = btns[0], bDl = btns[1];
       bB64.textContent = T('btn.copyB64');
       bB64.onclick = () => {
         const b64s = payloadBase64(h.text);
-        if (b64s) copyText(b64s);
         bB64.textContent = b64s ? T('btn.copied') : T('btn.b64Fail');
+        if (b64s) copyText(b64s);
         setTimeout(() => bB64.textContent = T('btn.copyB64'), 1600);
       };
+      // 无损替代：直接下载原始字节为 .bin 文件
+      bDl.textContent = T('btn.downloadRaw');
+      bDl.onclick = () => {
+        try {
+          const bytes = payloadBytes(h.text);
+          const blob = new Blob([bytes], { type: 'application/octet-stream' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = 'qrsuite-payload-' + bytes.length + 'B.bin';
+          document.body.appendChild(a); a.click();
+          setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+          bDl.textContent = T('btn.downloaded');
+        } catch (e) { bDl.textContent = T('btn.b64Fail'); }
+        setTimeout(() => bDl.textContent = T('btn.downloadRaw'), 1600);
+      };
     } else {
-      btns[1].textContent = T('btn.open');
-      btns[1].onclick = () => window.open(h.text, '_blank');
+      const b1 = btns[0], b2 = btns[1];
+      b1.textContent = T('btn.copy');
+      b1.onclick = () => {
+        copyText(h.text);
+        b1.textContent = T('btn.copied');
+        setTimeout(() => b1.textContent = T('btn.copy'), 1200);
+      };
+      b2.textContent = T('btn.open');
+      b2.onclick = () => window.open(h.text, '_blank');
     }
-    b1.onclick = () => {
-      copyText(h.text);
-      b1.textContent = T('btn.copied');
-      setTimeout(() => b1.textContent = T('btn.copy'), 1200);
-    };
     body.appendChild(d);
     history_add({ name: file.name || 'clipboard', format: h.format, text: h.text, engines: h.engines, file: file.size, binary: isBin });
   });
