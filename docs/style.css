@@ -96,8 +96,12 @@ main a{color:var(--acc)}
 .res.stylized .badge.cat{background:#4a3a1a;color:var(--warn);border-color:#6b5520;margin-left:6px}
 
 /* ============ 生成板块 ============ */
-.gen{margin-top:18px}
+/* 关键：生成面板复用了 .card 类，而 .card 是 `grid-template-columns:92px 1fr`
+   （为结果卡片的缩略图列设计）。若不覆盖，textarea 会被塞进 92px 那一列，
+   中文被压成竖排 —— 实测截图中就是这个现象。这里必须改回块级流。 */
+.gen{display:block;margin-top:18px}
 .gen h2{font-size:17px;margin:0 0 6px}
+.gen p{margin:0 0 10px}
 /* 输入区独占整行：此前被 .gen-row 的 flex 挤压导致中文竖排 */
 .gen textarea{display:block;width:100%;box-sizing:border-box;background:#0f1626;color:var(--fg);
   border:1px solid #26324a;border-radius:8px;padding:10px;font-size:14px;font-family:inherit;
