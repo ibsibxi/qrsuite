@@ -94,6 +94,10 @@ main a{color:var(--acc)}
 .res.stylized{border-left-color:var(--warn)}
 /* 异形码分类标记：与普通解码结果的徽章区分开 */
 .res.stylized .badge.cat{background:#4a3a1a;color:var(--warn);border-color:#6b5520;margin-left:6px}
+/* 二进制 payload（乘车码这类）：与普通解码结果区分开，并允许换行显示可读片段 */
+.res.binary{border-left-color:#7a5cff}
+.res.binary .badge.cat{background:#2c2450;color:#a99cff;border-color:#4a3d80;margin-left:6px}
+.res.binary .val{white-space:pre-wrap;word-break:break-all}
 
 /* ============ 生成板块 ============ */
 /* 关键：生成面板复用了 .card 类，而 .card 是 `grid-template-columns:92px 1fr`

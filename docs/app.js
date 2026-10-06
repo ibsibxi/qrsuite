@@ -254,17 +254,89 @@ async function decodeFile(file) {
 
 function mergeBackend(js, py) {
   const hits = new Map();
-  for (const h of js.hits) hits.set(h.text, { text: h.text, format: h.format, engines: new Set(h.engines), variants: new Set(h.variants) });
+  for (const h of js.hits) hits.set(h.text, { text: h.text, format: h.format, engines: new Set(h.engines), variants: new Set(h.variants), is_binary: !!h.is_binary });
   for (const h of py.results) {
-    const cur = hits.get(h.text) || { text: h.text, format: h.format, engines: new Set(), variants: new Set() };
+    const cur = hits.get(h.text) || { text: h.text, format: h.format, engines: new Set(), variants: new Set(), is_binary: !!h.is_binary };
+    // 后端 (Python) 会给出权威的二进制判定：任一来源判为二进制即标记为二进制
+    if (h.is_binary) cur.is_binary = true;
     h.engines.forEach(e => cur.engines.add('py:' + e));
     h.variants.forEach(v => cur.variants.add(v));
     hits.set(h.text, cur);
   }
   return Object.assign({}, js, {
-    hits: [...hits.values()].map(v => ({ text: v.text, format: v.format, engines: [...v.engines], variants: [...v.variants] })),
+    hits: [...hits.values()].map(v => ({ text: v.text, format: v.format, engines: [...v.engines], variants: [...v.variants], is_binary: v.is_binary })),
     backend: true
   });
+}
+
+/**
+ * 前端二进制判定（后端不可用时的兜底）。
+ *
+ * 与 Python 侧 qrsuite/binary.py 的判据保持一致：
+ *   · 含 NUL → 二进制
+ *   · zxing-cpp 的转义文本形态（"<SOH>"/"<U+81>"）→ 二进制
+ *   · 控制字符占比 > 10% → 二进制
+ *   · U+0080..U+00FF（字节被单字节直译的痕迹）占比 > 3% 且无 CJK → 二进制
+ * 目的：乘车码这类 payload 直接按文本渲染就是乱码，会被误认为"解析失败"。
+ */
+function isBinaryText(s) {
+  if (!s) return false;
+  if (s.indexOf('\u0000') >= 0) return true;
+  if (/<(?:U\+[0-9A-Fa-f]{2,6}|NUL|SOH|STX|ETX|EOT|ENQ|ACK|BEL|BS|HT|LF|VT|FF|CR|SO|SI|DLE|DC[1-4]|NAK|SYN|ETB|CAN|EM|SUB|ESC|FS|GS|RS|US|DEL)>/.test(s)) return true;
+  let ctrl = 0, nonAscii = 0, latin1 = 0, cjk = 0;
+  for (let i = 0; i < s.length; i++) {
+    const o = s.charCodeAt(i);
+    const c = s[i];
+    if (c === '\t' || c === '\n' || c === '\r') continue;
+    if (o === 0xFFFD) return true;
+    if (o >= 0x4E00 && o <= 0x9FFF) { cjk++; nonAscii++; }
+    else if (o >= 0x3040 && o <= 0x30FF) { cjk++; nonAscii++; }
+    else if (o >= 0x80 && o <= 0xFF) { latin1++; nonAscii++; }
+    else if (o < 32 || o === 127 || (o >= 0xDC80 && o <= 0xDCFF)) ctrl++;
+    else if (o > 127) nonAscii++;
+  }
+  const n = s.length;
+  if (ctrl / n > 0.10) return true;
+  if (latin1 / n > 0.03 && cjk === 0) return true;
+  if ((nonAscii + ctrl) / n > 0.05 && ctrl > 0 && cjk === 0) return true;
+  if (nonAscii / n > 0.80 && cjk === 0) return true;
+  return false;
+}
+
+/** 把二进制 payload 还原成可读片段（连续可打印 ASCII，长度 ≥ 6）。 */
+function binaryRuns(s, limit) {
+  const out = [];
+  const seen = new Set();
+  // 先按单字节还原（解码器直译字节时正是这个映射），再找回连续可打印段
+  let bytes = '';
+  for (let i = 0; i < s.length; i++) {
+    const o = s.charCodeAt(i);
+    if (o >= 0xDC80 && o <= 0xDCFF) bytes += String.fromCharCode(o - 0xDC00);
+    else if (o <= 0xFF) bytes += String.fromCharCode(o);
+    else bytes += '?';
+  }
+  const re = /[\x20-\x7e]{6,}/g;
+  let m;
+  while ((m = re.exec(bytes)) !== null) {
+    const r = m[0];
+    if (seen.has(r) || (r[0] === '<' && r[r.length - 1] === '>')) continue;
+    seen.add(r);
+    out.push(r);
+    if (out.length >= (limit || 4)) break;
+  }
+  return out;
+}
+
+/** 计算 payload 的字节数与可打印占比（用于展示"这是二进制"的证据）。 */
+function binaryStats(s) {
+  let n = 0, printable = 0;
+  for (let i = 0; i < s.length; i++) {
+    const o = s.charCodeAt(i);
+    if (o >= 0xDC80 && o <= 0xDCFF) { n++; continue; }
+    if (o <= 0xFF) { n++; if (o >= 32 && o < 127) printable++; }
+    else { n += 3; }                       // CJK 等按 UTF-8 3 字节粗估
+  }
+  return { bytes: n, printableRatio: n ? printable / n : 0 };
 }
 
 /* ============================ 5. 渲染 ============================ */
@@ -322,20 +394,34 @@ function render(card, res, total, file) {
     stages: res.stages, early: res.early ? T('meta.early') : '', tag: tag
   });
   res.hits.forEach(h => {
+    // 二进制 payload（乘车码/令牌这类）：直接按文本渲染就是满屏控制字符，
+    // 用户会误以为"没解析出来"。这里改为明确标注 + 给出可读片段。
+    const isBin = (h.is_binary !== undefined) ? !!h.is_binary : isBinaryText(h.text);
     const d = document.createElement('div');
-    d.className = 'res';
+    d.className = 'res' + (isBin ? ' binary' : '');
     d.innerHTML = `<div><span class="badge f"></span>${h.engines.map(e => `<span class="badge g">${e}</span>`).join('')}` +
-      `${h.variants.slice(0, 4).map(v => `<span class="badge">${v}</span>`).join('')}</div>
+      `${h.variants.slice(0, 4).map(v => `<span class="badge">${v}</span>`).join('')}` +
+      (isBin ? `<span class="badge cat"></span>` : '') + `</div>
       <div class="val"></div><div class="row"><button class="b-copy"></button><button class="b-open"></button></div>`;
     d.querySelector('.badge.f').textContent = h.format;
-    d.querySelector('.val').textContent = h.text;
+    if (isBin) {
+      const st = binaryStats(h.text);
+      const runs = binaryRuns(h.text, 4);
+      d.querySelector('.badge.cat').textContent = T('binary.tag');
+      let note = T('binary.note', { n: st.bytes, p: Math.round(st.printableRatio * 100) });
+      if (runs.length) note += '\n' + T('binary.runs') + ' ' + runs.join(' | ');
+      d.querySelector('.val').textContent = note;
+    } else {
+      d.querySelector('.val').textContent = h.text;
+    }
     const [b1, b2] = d.querySelectorAll('button');
     b1.textContent = T('btn.copy');
-    b2.textContent = T('btn.open');
+    // 二进制没有可打开的链接，隐藏"打开"按钮
+    if (isBin) { b2.style.display = 'none'; } else { b2.textContent = T('btn.open'); }
     b1.onclick = () => { navigator.clipboard.writeText(h.text).catch(() => { }); b1.textContent = T('btn.copied'); setTimeout(() => b1.textContent = T('btn.copy'), 1200); };
     b2.onclick = () => window.open(h.text, '_blank');
     body.appendChild(d);
-    history_add({ name: file.name || 'clipboard', format: h.format, text: h.text, engines: h.engines, file: file.size });
+    history_add({ name: file.name || 'clipboard', format: h.format, text: h.text, engines: h.engines, file: file.size, binary: isBin });
   });
 }
 

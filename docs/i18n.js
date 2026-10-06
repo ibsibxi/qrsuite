@@ -92,6 +92,10 @@
   'gen.fail': '生成失败：',
   'gen.errNoLib': '生成库未加载',
   'gen.scanWarn': '提示：圆角样式与方块一样可扫；圆点样式已调成覆盖四角（内切圆会扫不出，实测过）。中心加 Logo 会遮挡模块，请用 H 级纠错并先试扫。',
+  // 二进制 payload（乘车码/令牌这类）
+  'binary.tag': '二进制数据',
+  'binary.note': '解出了 {n} 字节的二进制数据（可打印占比 {p}%）—— 这不是文本，无法按文字显示。常见于乘车码、电子票据这类加密令牌。',
+  'binary.runs': '其中的可读片段:',
       'meta.decoded': '{w}×{h} · 解出 {n} 条 · {ms}ms · {stages} 阶段{early}{tag}',
       'meta.early': ' · 早退',
       'btn.copy': '复制',
@@ -205,6 +209,10 @@
   'gen.fail': 'Generation failed: ',
   'gen.errNoLib': 'Generator library not loaded',
   'gen.scanWarn': 'Note: rounded modules scan as well as squares; dot style is tuned to cover module corners (an inscribed circle does not scan — verified). A centre logo covers modules: use EC level H and test-scan first.',
+  // Binary payloads (transit codes, tokens)
+  'binary.tag': 'Binary data',
+  'binary.note': 'Decoded {n} bytes of binary data ({p}% printable) — this is not text and cannot be shown as characters. Typical of transit codes and encrypted tickets.',
+  'binary.runs': 'Readable fragments:',
       'meta.decoded': '{w}×{h} · {n} result(s) · {ms}ms · {stages} stages{early}{tag}',
       'meta.early': ' · early exit',
       'btn.copy': 'Copy',

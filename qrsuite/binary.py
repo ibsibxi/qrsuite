@@ -148,10 +148,18 @@ def extract_runs(s: str, min_len: int = 4, limit: int = 12) -> list:
     seen = set()
     for m in _RUN_BYTES_RE.finditer(bytes(raw)):
         r = m.group().decode('ascii')
-        # 过滤掉明显是转义写法的伪片段
+        # 过滤掉明显是转义写法的片段（zxing-cpp 会把不可打印字节渲染成
+        # "<SOH>"、"<U+81>" 这类字面文本，它们不是可读内容）。
         if len(r) < min_len or r in seen:
             continue
-        if r.startswith('<') and r.endswith('>'):
+        if _ESCAPE_TOKEN_RE.search(r):
+            continue
+        # 片段里若混有大量 "<XXX>" 形式的记号，也不给用户看
+        if re.search(r'<[A-Z][A-Z0-9]{1,5}>', r) or re.search(r'<U\+[0-9A-Fa-f]{2,6}>', r):
+            continue
+        # 要求足够比例的字母/数字，纯符号片段没有信息量
+        alnum = sum(1 for c in r if c.isalnum())
+        if alnum / len(r) < 0.4:
             continue
         seen.add(r)
         out.append(r)
