@@ -269,3 +269,73 @@ _fit_tri_center(pts)        # 3 牛眼 = 矩形三角 → 圆心 = 另两角中�
 - 真太阳码**无法本地生成**（同上）。需要只能调微信官方 `wxa/getwxacode*`（AppKey 风险）。
 - 支付宝厂商判定**未接入**（缺公开可验证的几何判据与样本）。
 - Windows 版**无代码签名**（需购买证书，脚本与 CI 已就绪）。
+
+---
+
+## 十、Android 端二进制的接入与「免管道」单元测试（2.1.3）
+
+### 做了什么
+Android 端此前**完全没处理二进制 payload**（网页端与 Python 端早已支持）。
+乘车码这类码在手机上直接显示 `getRawValue()`，就是满屏控制字符、看着像没解析出来。
+
+现在接入：
+- `PayloadClassifier.java`（新）—— 判定与可读片段提取，判据与 Python `qrsuite/binary.py`、
+  网页端 `docs/app.js` 保持一致。
+- `MainActivity.showResult()` 增加 `byte[] rawBytes` 重载；判定为二进制时切到
+  「二进制数据」形态：显示字节数 + 可读片段，**复制走 Base64、分享走 .bin 文件**。
+- `AndroidManifest.xml` 新增 `FileProvider`（`${applicationId}.fileprovider`），
+  路径只开 `cache/payload`（`res/xml/file_paths.xml`）。
+
+### 为什么判定必须用 getRawBytes() 而不是 getRawValue()
+`javap` 查证 ML Kit 17.3.0 的 `Barcode` 同时提供：
+| 方法 | 性质 | 用途 |
+|---|---|---|
+| `getRawBytes()` | **原始字节**，无损失 | **判定必须基于它** |
+| `getRawValue()` | 按 UTF-8 解码的 String，无效序列变 U+FFFD、可能在 NUL 处截断 | 仅用于展示可读文本 |
+
+### 为什么复制走 Base64（与网页端同因）
+剪贴板把文本按纯文本传输，会把 `\n` 规范化成 `\r\n`。实测：源 317 字节 → 剪贴板 318 字节，
+第 86 字节 `0x0A` 变成 `0x0D 0x0A`。对二进制是**真损坏**，所以不提供"复制原文"。
+
+### 「免管道」单元测试（重要，以后都会用到）
+**问题**：`gradlew :app:testDebugUnitTest` 在本机**必然失败**，但与代码无关——
+
+    Could not write standard input to Gradle Test Executor 1.
+    java.io.IOException: 管道正在被关闭。
+    java.lang.ClassNotFoundException: worker.org.gradle.process.internal.worker.GradleWorkerMain
+
+Gradle 的 Test Executor 是独立进程，通过**管道**与主进程通信；本机沙箱**禁用管道**。
+（这与"Node 的 child_process 拿不到 stdout 管道"是同一类边界。）
+
+**绕行方案**（已固化为 `android/tools/run_unit_tests.py`）：
+1. 只用 Gradle 做**编译**（不启动 worker，因此不需要管道）：
+   `gradlew --offline :app:compileDebugUnitTestJavaWithJavac`
+2. 用 Python 脚本直接 `java` 启动一个自写的极简 JUnit 运行器（`UnitTestRunner`），
+   反射调用 `@Test` 方法，断言仍用 `org.junit.Assert`。**全程无管道**。
+
+**踩到的两个坑（都已解决，记录以免重踩）**：
+- **classpath 太长**：Gradle transforms 里有 300+ 个 jar，命令行超 Windows 上限
+  （`WinError 206 文件名或扩展名太长`）→ 改用 Java 的 `@argfile`。
+- **@argfile 的编码**：Java 读 `@argfile` 用的是**系统默认编码（中文 Windows 是 CP936）**，
+  不是 UTF-8。按 UTF-8 写会把中文路径（`E:\学习\...`）解成乱码（实测变成 `E:/瀛︿範/...`），
+  导致 classpath 全错、报 `ClassNotFoundException: UnitTestRunner`。→ 按系统编码写文件。
+
+### 测试覆盖（21 个用例，全部通过）
+重点是**反例**：正常文本、中文、URL、含换行的文本都必须**不**被判为二进制。
+判定错两个方向都有害：文本误判成二进制（用户拿不到内容）、二进制误判成文本（显示乱码）。
+另有 Base64 往返无损、可读片段过滤、边界（null/空/limit/去重）等。
+
+### APK 核验（手机不可用时用静态核验代替真机）
+- 版本 `versionCode 5 / versionName 2.1.3`
+- 签名 `CN=QRSuite`，SHA-256 `7a751c90...`（正式签名，非 debug）
+- `FileProvider` 已注册，authorities = `com.qrsuite.scanner.fileprovider`
+- **R8 是否裁掉关键类**：`mapping.txt` 里 `PayloadClassifier` 只有方法级行、无类级映射，
+  是 R8 **内联**的典型特征。决定性验证方式是搜 DEX 里的特征字符串：
+  `字节的二进制数据` / `其中的可读片段` / `分享 .bin` **均存在于 classes.dex**，
+  证明代码确实进了包。（注意：`R.string.*` 的文案在 `resources.arsc` 里，
+  不以明文出现在 DEX，别把"搜不到"误判成"被裁掉"。）
+
+### 小修正
+`MainActivity.java` 第 55 行原本是两个 import 挤在同一行
+（`...common.Barcode;import com.google.mlkit.vision.common.InputImage;`）。
+这**不是**语法错误（Java 允许同行多 import），编译也正常，是非编辑器工具写坏的痕迹，已拆行。

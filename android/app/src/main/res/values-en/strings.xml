@@ -47,4 +47,14 @@
     <string name="fail_nothing_found">No QR code or barcode was found in this image.\nTips: use the original photo (not a re-compressed screenshot), aim straight at the code, avoid glare and blur.</string>
     <string name="fail_decode_error">Decoding failed: %1$s</string>
     <string name="fail_camera_init">Camera initialization failed: %1$s</string>
+
+    <!-- ===== Binary payload (transit codes / e-tickets) =====
+         Such codes carry binary, not text; showing getRawValue() directly yields control
+         characters (garbage). Copy uses Base64 and Share sends a .bin file — both lossless,
+         because the clipboard normalises \n to \r\n and would corrupt the data. -->
+    <string name="binary_title">Binary data</string>
+    <string name="copy_b64">Copy Base64</string>
+    <string name="copied_b64">Base64 copied</string>
+    <string name="share_raw">Share raw data (.bin)</string>
+    <string name="share_raw_failed">Share failed</string>
 </resources>

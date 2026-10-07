@@ -45,6 +45,7 @@ import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 
 import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.google.android.material.button.MaterialButton;
@@ -52,8 +53,11 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.barcode.BarcodeScanner;
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions;
 import com.google.mlkit.vision.barcode.BarcodeScanning;
-import com.google.mlkit.vision.barcode.common.Barcode;import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.barcode.common.Barcode;
+import com.google.mlkit.vision.common.InputImage;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -523,7 +527,8 @@ public class MainActivity extends AppCompatActivity {
         db.add(content, format, "camera");
         buzz(35);
         setScanning(false);
-        showResult(content, format);
+        // 传原始字节：由 showResult 判定是否为二进制（乘车码这类）
+        showResult(content, format, null, null, best.getRawBytes());
     }
 
     private void setScanning(boolean on) {
@@ -581,7 +586,8 @@ public class MainActivity extends AppCompatActivity {
                     }
                     buzz(35);
                     Barcode b0 = codes.get(0);
-                    showResult(b0.getRawValue(), formatName(b0.getFormat()));
+                    // 传原始字节：由 showResult 判定是否为二进制（乘车码这类）
+                    showResult(b0.getRawValue(), formatName(b0.getFormat()), null, null, b0.getRawBytes());
                 })
                 .addOnFailureListener(e -> {
                     setScanning(true);
@@ -713,6 +719,18 @@ public class MainActivity extends AppCompatActivity {
      * @param notice  失败说明；非 null 时进入失败态
      */
     private void showResult(String content, String format, String vendor, String notice) {
+        showResult(content, format, vendor, notice, null);
+    }
+
+    /**
+     * 统一结果组件（含二进制 payload 支持）。
+     *
+     * @param rawBytes ML Kit 的 {@code getRawBytes()}。传入后若判定为二进制，
+     *                 界面改为「二进制数据」形态：显示字节数与可读片段，
+     *                 复制走 Base64（无损），分享发送原始 .bin 文件。
+     *                 直接显示 getRawValue() 的字符串会是满屏控制字符（乱码）。
+     */
+    private void showResult(String content, String format, String vendor, String notice, byte[] rawBytes) {
         BottomSheetDialog dlg = new BottomSheetDialog(this, R.style.Theme_QRSuite_Sheet);
         View v = LayoutInflater.from(this).inflate(R.layout.sheet_result, null, false);
 
@@ -731,10 +749,14 @@ public class MainActivity extends AppCompatActivity {
         View rowSub = v.findViewById(R.id.resRowSub);
 
         boolean failed = (notice != null);
+        // 二进制判定基于**原始字节**（getRawBytes），不是解码后的字符串
+        boolean binary = !failed && PayloadClassifier.isBinary(rawBytes);
 
         // ---- 标签区 ----
         if (failed) {
             tvFormat.setText(R.string.fail_title);
+        } else if (binary) {
+            tvFormat.setText(R.string.binary_title);
         } else {
             tvFormat.setText(format == null ? "" : format);
         }
@@ -757,26 +779,46 @@ public class MainActivity extends AppCompatActivity {
         } else {
             tvNotice.setVisibility(View.GONE);
             tvContent.setVisibility(View.VISIBLE);
-            tvContent.setText(content);
             tvMeta.setVisibility(View.VISIBLE);
-            tvMeta.setText(content.length() + " 字符 · 已存入历史");
             rowMain.setVisibility(View.VISIBLE);
             rowSub.setVisibility(View.VISIBLE);
 
-            boolean isUrl = looksLikeUrl(content);
-            bOpen.setVisibility(isUrl ? View.VISIBLE : View.GONE);
-            if (openDivider != null) openDivider.setVisibility(isUrl ? View.VISIBLE : View.GONE);
+            if (binary) {
+                // —— 二进制形态 ——
+                tvContent.setText(PayloadClassifier.describe(rawBytes));
+                tvMeta.setText(String.format(Locale.ROOT, "%d 字节 · 二进制 · 已存入历史", rawBytes.length));
+                // 二进制没有可打开的链接 / 搜索意义不大，但搜索仍可用于核对片段
+                bOpen.setVisibility(View.GONE);
+                if (openDivider != null) openDivider.setVisibility(View.GONE);
 
-            bCopy.setOnClickListener(x -> {
-                copy(content);
-                Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show();
-            });
-            bShare.setOnClickListener(x -> {
-                Intent i = new Intent(Intent.ACTION_SEND);
-                i.setType("text/plain");
-                i.putExtra(Intent.EXTRA_TEXT, content);
-                startActivity(Intent.createChooser(i, getString(R.string.share)));
-            });
+                bCopy.setText(R.string.copy_b64);
+                bCopy.setOnClickListener(x -> {
+                    // 用 Android 的 Base64 实现注入给分类器（分类器本身不依赖 android.*，便于纯 JVM 测试）
+                    copy(PayloadClassifier.toBase64(rawBytes,
+                            r -> android.util.Base64.encodeToString(r, android.util.Base64.NO_WRAP)));
+                    Toast.makeText(this, R.string.copied_b64, Toast.LENGTH_SHORT).show();
+                });
+                bShare.setText(R.string.share_raw);
+                bShare.setOnClickListener(x -> shareRawBytes(rawBytes));
+            } else {
+                tvContent.setText(content);
+                tvMeta.setText(content.length() + " 字符 · 已存入历史");
+
+                boolean isUrl = looksLikeUrl(content);
+                bOpen.setVisibility(isUrl ? View.VISIBLE : View.GONE);
+                if (openDivider != null) openDivider.setVisibility(isUrl ? View.VISIBLE : View.GONE);
+
+                bCopy.setOnClickListener(x -> {
+                    copy(content);
+                    Toast.makeText(this, R.string.copied, Toast.LENGTH_SHORT).show();
+                });
+                bShare.setOnClickListener(x -> {
+                    Intent i = new Intent(Intent.ACTION_SEND);
+                    i.setType("text/plain");
+                    i.putExtra(Intent.EXTRA_TEXT, content);
+                    startActivity(Intent.createChooser(i, getString(R.string.share)));
+                });
+            }
             bOpen.setOnClickListener(x -> openUrl(content));
             bSearch.setOnClickListener(x -> {
                 Intent i = new Intent(Intent.ACTION_VIEW,
@@ -793,6 +835,32 @@ public class MainActivity extends AppCompatActivity {
             if (hasCamera()) setScanning(true);
         });
         dlg.show();
+    }
+
+    /**
+     * 分享原始字节为 .bin 文件。
+     *
+     * <p>为什么用文件而不是文本：剪贴板/文本分享会把 {@code \n} 规范化成 {@code \r\n}，
+     * 对二进制是真损坏。落成文件才能保证字节不变。
+     */
+    private void shareRawBytes(byte[] raw) {
+        try {
+            File dir = new File(getCacheDir(), "payload");
+            if (!dir.exists() && !dir.mkdirs()) { return; }
+            File f = new File(dir, "qrsuite-payload-" + raw.length + "B.bin");
+            try (FileOutputStream fos = new FileOutputStream(f)) {
+                fos.write(raw);
+            }
+            Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", f);
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("application/octet-stream");
+            i.putExtra(Intent.EXTRA_STREAM, uri);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(Intent.createChooser(i, getString(R.string.share_raw)));
+        } catch (Exception e) {
+            Log.w(TAG, "分享原始数据失败", e);
+            Toast.makeText(this, R.string.share_raw_failed, Toast.LENGTH_SHORT).show();
+        }
     }
 
     /** 兼容旧调用：成功态、无厂商。 */

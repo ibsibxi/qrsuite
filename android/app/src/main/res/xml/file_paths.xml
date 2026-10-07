@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FileProvider 暴露的路径。
+  只开放 cache/payload —— 二进制 payload 分享用的 .bin 文件就写在这里。
+  刻意不开放 files-path / external-path，避免把应用私有数据暴露给外部应用。
+-->
+<paths>
+    <cache-path
+        name="payload"
+        path="payload/" />
+</paths>

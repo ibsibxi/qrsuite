@@ -33,6 +33,16 @@
 
     <!-- ===== 失败态（也用同一个结果组件展示，不再弹 toast）===== -->
     <string name="fail_title">未能识别</string>
+
+    <!-- ===== 二进制 payload（乘车码/电子票据这类）=====
+         这类码里装的不是文本而是二进制；直接显示 getRawValue() 会是满屏控制字符（乱码）。
+         复制走 Base64、分享走 .bin 文件，都是**无损**路径——
+         剪贴板会把 \n 规范化成 \r\n，复制"原文"会改动数据。 -->
+    <string name="binary_title">二进制数据</string>
+    <string name="copy_b64">复制 Base64</string>
+    <string name="copied_b64">已复制 Base64</string>
+    <string name="share_raw">分享原始数据(.bin)</string>
+    <string name="share_raw_failed">分享失败</string>
     <string name="fail_image_unreadable">图片读取失败。可能文件已损坏或格式不受支持，换一张试试。</string>
     <string name="fail_nothing_found">这张图里没有找到可识别的二维码或条码。\n建议：用原图（不要用截图再压缩过的）、对准码、避免反光与模糊。</string>
     <string name="fail_decode_error">识别过程出错：%1$s</string>
